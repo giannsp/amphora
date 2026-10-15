@@ -1,3 +1,4 @@
+import AppKit
 import IPSWMirrorCore
 import SwiftUI
 
@@ -35,6 +36,7 @@ struct ContentView: View {
                     Label("Downloaded", systemImage: "internaldrive")
                         .tag(Pane.files)
                     Label("Activity", systemImage: "list.bullet.rectangle")
+                        .badge(model.unseenWarnings)
                         .tag(Pane.activity)
                 }
             }
@@ -94,7 +96,20 @@ struct ContentView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.checkConfiguratorAccess()
+        }
+        .onChange(of: pane) { _, pane in
+            if pane == .activity { model.unseenWarnings = 0 }
+        }
+        .sheet(isPresented: Binding(get: { model.showConfiguratorSetup },
+                                    set: { model.showConfiguratorSetup = $0 })) {
+            ConfiguratorSetupView()
+                .environment(model)
+        }
         .task {
+            model.checkConfiguratorAccess()
+            if model.shouldOfferConfiguratorSetup { model.showConfiguratorSetup = true }
             await model.load()
             // Keep current while the app is open. Background sync without the app arrives in v0.3.
             while !Task.isCancelled {

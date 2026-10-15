@@ -47,7 +47,9 @@ The default folder is `/Users/Shared/IPSW Mirror`.
 
 - **Tick** the models you want kept current. They sync on launch, every 6 hours while the app is open, and on **Sync Now** (⌘R).
 - **Download now** (↓ on any row) fetches one model immediately. Use it for the odd device that walks in.
-- **Settings** → choose the folder, turn cleanup on or off, and optionally place IPSWs in Apple Configurator's cache.
+- **Restore:** with Full Disk Access (below), IPSWs are placed in Apple Configurator's cache and its restores start without a download. Without it, drag a model (or a file from **Downloaded**) onto the device in Configurator.
+- **Downloaded** lists every IPSW on disk. Select files and press Delete to remove them; you're told which models use a file first.
+- **Settings** → choose the folder, turn cleanup on or off, and see whether the Apple Configurator cache is working.
 
 Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example `iPhone16,1`).
 
@@ -60,11 +62,34 @@ Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM
 | `SelectedModels` | array of strings | Model identifiers to keep current |
 | `StorePath` | string | Folder for IPSWs |
 | `PruneOldIPSWs` | boolean | Delete IPSWs no longer needed (default `true`) |
-| `ExportToConfigurator` | boolean | Also place IPSWs in Apple Configurator's cache (default `false`) |
+| `ExportToConfigurator` | boolean | Place IPSWs in Apple Configurator's cache (default `true`) |
 
-## Apple Configurator cache (experimental)
+## Apple Configurator cache and Full Disk Access
 
-With this setting on, verified IPSWs are also placed in Apple Configurator's firmware cache so its restores start without a download. On APFS the copy is a clone and takes no extra space. The cache location is still being verified across Configurator versions, which is why it's off by default. Reports welcome.
+IPSW Mirror places each verified IPSW in Apple Configurator's firmware cache:
+
+```
+~/Library/Group Containers/K36BKF7T3D.group.com.apple.configurator/Library/Caches/Firmware
+```
+
+so Configurator's restores start immediately. On APFS the copy is a clone and uses no extra space.
+
+macOS protects that folder. IPSW Mirror needs **Full Disk Access** to write there, and macOS does not prompt for it; without it, writes simply fail. The app tells you when that happens.
+
+- **One Mac:** System Settings → Privacy & Security → Full Disk Access → add IPSW Mirror, then reopen it.
+- **Managed Macs (Jamf Pro):** deploy a Privacy Preferences Policy Control profile:
+
+| Field | Value |
+| --- | --- |
+| Identifier | `consulting.techne.ipswmirror` |
+| Identifier type | Bundle ID |
+| Code requirement | output of `codesign -dr - "/Applications/IPSW Mirror.app"` |
+| App or service | SystemPolicyAllFiles |
+| Access | Allow |
+
+The code requirement is only stable for a Developer ID-signed release, so use a released build for the profile.
+
+Full Disk Access is a broad permission. If your security team won't grant it, turn the setting off and drag models onto devices in Configurator instead.
 
 ## Privacy and network
 
@@ -78,7 +103,7 @@ No telemetry and no accounts. Requests carry a `User-Agent` of `IPSWMirror/<vers
 
 ## Roadmap
 
-- **v0.1 — Usable without Jamf.** Curated and on-demand modes, app and CLI, verify and prune, Configurator export.
+- **v0.1 — Usable without Jamf.** Curated and on-demand modes, app and CLI, verify and prune, drag to restore, manual delete.
 - **v0.2 — Jamf-driven.** Model list from Jamf Pro inventory through a read-only API client, Keychain storage, signed and notarized `.pkg`.
 - **v0.3 — Runs on its own.** Menu bar agent with background sync, notifications, Universal Mac IPSWs for Apple Silicon.
 

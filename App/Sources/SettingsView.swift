@@ -32,11 +32,29 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Also place IPSWs in Apple Configurator's cache", isOn: $model.exportToConfigurator)
+                Toggle("Place IPSWs in Apple Configurator's cache", isOn: $model.exportToConfigurator)
+                    .disabled(model.configuratorManaged)
+                LabeledContent("Status") {
+                    switch model.configuratorAccess {
+                    case .granted:
+                        Label("Working", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    case .denied:
+                        Label("Needs Full Disk Access", systemImage: "lock.shield").foregroundStyle(.orange)
+                    case .configuratorNotFound:
+                        Label("Open Apple Configurator once", systemImage: "questionmark.app.dashed").foregroundStyle(.orange)
+                    case nil:
+                        Text("Off").foregroundStyle(.secondary)
+                    }
+                }
+                if model.configuratorAccess == .denied {
+                    Button("Open Privacy Settings") {
+                        NSWorkspace.shared.open(ConfiguratorCache.fullDiskAccessSettingsURL)
+                    }
+                }
             } header: {
-                Text("Apple Configurator (experimental)")
+                Text("Apple Configurator")
             } footer: {
-                Text("Restores in Apple Configurator then start without a download. On APFS the copy is a clone and uses no extra space.")
+                Text("Restores in Apple Configurator then start without a download. On APFS the copy is a clone and uses no extra space. macOS protects Configurator's folder, so IPSW Mirror needs Full Disk Access; on managed Macs a Jamf PPPC profile grants it.")
                     .foregroundStyle(.secondary)
             }
 
@@ -51,6 +69,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear { model.checkConfiguratorAccess() }
         .frame(width: 560)
         .fixedSize(horizontal: false, vertical: true)
     }

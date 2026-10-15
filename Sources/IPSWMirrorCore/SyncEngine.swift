@@ -110,6 +110,19 @@ public actor SyncEngine {
         }
 
         var manifest = store.readManifest()
+        var exportToConfigurator = options.exportToConfigurator && !options.dryRun
+        if exportToConfigurator {
+            switch ConfiguratorCache.checkAccess() {
+            case .granted:
+                break
+            case .configuratorNotFound:
+                exportToConfigurator = false
+                await onEvent(.warning("Apple Configurator hasn't been opened on this Mac yet. Open it once, then sync again."))
+            case .denied:
+                exportToConfigurator = false
+                await onEvent(.warning("macOS blocks Apple Configurator's folder. Give IPSW Mirror Full Disk Access, then sync again."))
+            }
+        }
 
         for item in items {
             try Task.checkCancellation()
@@ -129,7 +142,7 @@ public actor SyncEngine {
                     continue
                 }
             }
-            if options.exportToConfigurator, !options.dryRun {
+            if exportToConfigurator, store.isComplete(firmware) {
                 do {
                     try ConfiguratorCache.export(store.path(for: firmware))
                     if !manifest.exportedToConfigurator.contains(firmware.fileName) {

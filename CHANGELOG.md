@@ -7,6 +7,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Apple Configurator cache is on by default, checks whether macOS allows it (Full Disk Access) and says so in the Overview and Settings, with a button to the right Privacy setting.
+- Setup sheet for Full Disk Access, which macOS never prompts for: opens the right Privacy setting, offers the app icon to drag into the list, and confirms by itself when access is granted.
+- Drag to restore: drag a model or a downloaded file onto a device in Apple Configurator, as a fallback when Full Disk Access isn't granted. Show IPSW in Finder in each model's menu.
+- Activity shows a badge when a sync logged warnings you haven't seen.
 - Manual delete: a Downloaded pane listing every IPSW on disk (multi-select, Delete key, Show in Finder) and Delete Downloaded IPSW in each model's menu. Confirms first, names every model a shared file serves, and offers to stop keeping those models current.
 
 ### Changed

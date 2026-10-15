@@ -62,8 +62,9 @@ final class AppModel {
     private enum Key {
         static let selected = "SelectedModels"
         static let storePath = "StorePath"
-        static let configurator = "ExportToConfigurator"
         static let prune = "PruneOldIPSWs"
+        static let configurator = "ExportToConfigurator"
+        static let setupDismissed = "ConfiguratorSetupDismissed"
         static let lastSync = "LastSync"
     }
 
@@ -79,6 +80,8 @@ final class AppModel {
     var storedFiles: [StoredFile] = []
     /// File names waiting for the user to confirm deletion.
     var pendingDeletion: Set<String>?
+    /// Warnings logged since the user last opened Activity.
+    var unseenWarnings = 0
     var diskUsage: Int64 { storedFiles.reduce(0) { $0 + $1.size } }
     var fileCount: Int { storedFiles.count }
     private var currentTask: Task<Void, Never>?
@@ -90,11 +93,26 @@ final class AppModel {
     var storePath: String {
         didSet { defaults.set(storePath, forKey: Key.storePath); refreshStatus() }
     }
-    var exportToConfigurator: Bool {
-        didSet { defaults.set(exportToConfigurator, forKey: Key.configurator) }
-    }
     var prune: Bool {
         didSet { defaults.set(prune, forKey: Key.prune) }
+    }
+    /// Place verified IPSWs in Apple Configurator's cache so its restores start without a download.
+    var exportToConfigurator: Bool {
+        didSet {
+            defaults.set(exportToConfigurator, forKey: Key.configurator)
+            checkConfiguratorAccess()
+        }
+    }
+    var configuratorAccess: ConfiguratorCache.Access?
+    /// The Full Disk Access setup sheet.
+    var showConfiguratorSetup = false
+    var configuratorSetupDismissed: Bool {
+        didSet { defaults.set(configuratorSetupDismissed, forKey: Key.setupDismissed) }
+    }
+
+    /// Offer the setup sheet on launch once, unless an MDM manages the setting (a PPPC profile is the fix there).
+    var shouldOfferConfiguratorSetup: Bool {
+        exportToConfigurator && configuratorAccess == .denied && !configuratorSetupDismissed && !configuratorManaged
     }
     var lastSync: Date? {
         didSet { defaults.set(lastSync, forKey: Key.lastSync) }
@@ -103,8 +121,9 @@ final class AppModel {
     init() {
         selected = Set(defaults.stringArray(forKey: Key.selected) ?? [])
         storePath = defaults.string(forKey: Key.storePath) ?? Store.defaultRoot.path
-        exportToConfigurator = defaults.bool(forKey: Key.configurator)
         prune = defaults.object(forKey: Key.prune) as? Bool ?? true
+        exportToConfigurator = defaults.object(forKey: Key.configurator) as? Bool ?? true
+        configuratorSetupDismissed = defaults.bool(forKey: Key.setupDismissed)
         lastSync = defaults.object(forKey: Key.lastSync) as? Date
     }
 
@@ -115,6 +134,16 @@ final class AppModel {
     /// True when a configuration profile sets the value, so the UI shows it locked.
     var storePathManaged: Bool { defaults.objectIsForced(forKey: Key.storePath) }
     var selectionManaged: Bool { defaults.objectIsForced(forKey: Key.selected) }
+    var configuratorManaged: Bool { defaults.objectIsForced(forKey: Key.configurator) }
+
+    /// True when the export is on but macOS (or a missing Configurator) stops it.
+    var configuratorBlocked: Bool {
+        exportToConfigurator && configuratorAccess != nil && configuratorAccess != .granted
+    }
+
+    func checkConfiguratorAccess() {
+        configuratorAccess = exportToConfigurator ? ConfiguratorCache.checkAccess() : nil
+    }
 
     var keptRows: [Row] { rows.filter { selected.contains($0.id) } }
     var readyCount: Int { keptRows.filter { status[$0.id]?.isReady == true }.count }
@@ -193,6 +222,11 @@ final class AppModel {
 
     func fileName(for identifier: String) -> String? {
         storedFiles.first { $0.models.contains(identifier) }?.name
+    }
+
+    /// The IPSW on disk for a model, for drag-to-restore and Show in Finder.
+    func fileURL(for identifier: String) -> URL? {
+        fileName(for: identifier).map { store.root.appendingPathComponent($0) }
     }
 
     func requestDelete(_ names: Set<String>) {
@@ -301,6 +335,7 @@ final class AppModel {
                 append("Cancelled. Partial downloads resume next time.")
             } catch {
                 lastError = error.localizedDescription
+                unseenWarnings += 1
                 append("Error: \(error.localizedDescription)")
             }
         }
@@ -311,6 +346,7 @@ final class AppModel {
         progress = nil
         for id in options.models where status[id] == .queued { status[id] = nil }
         refreshStatus()
+        checkConfiguratorAccess()
     }
 
     private func handle(_ event: SyncEvent) {
@@ -323,6 +359,7 @@ final class AppModel {
             for item in items where item.onDisk { set(item.firmware, .ready(item.firmware.version)) }
             append("Plan: \(items.count) file(s), \(missing.count) to download")
         case let .warning(message):
+            unseenWarnings += 1
             append("⚠︎ \(message)")
         case let .downloadStarted(fw):
             append("Downloading \(fw.fileName)")

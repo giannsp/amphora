@@ -153,6 +153,7 @@ struct DeviceRow: View {
     @State private var hovering = false
 
     private var isKept: Bool { model.selected.contains(row.id) }
+    private var fileURL: URL? { model.fileURL(for: row.id) }
     private var status: AppModel.Status { model.status[row.id] ?? .missing }
     private var canDownload: Bool {
         switch status {
@@ -187,12 +188,23 @@ struct DeviceRow: View {
             .opacity(hovering && canDownload ? 1 : 0)
             .accessibilityLabel("Download now")
             .help(isKept ? "Download now" : "Download now. Removed at the next sync unless you keep this model current.")
+            .overlay {
+                // Where the download button sits, a grip says "this row can be dragged" once a file exists.
+                if fileURL != nil && !canDownload && hovering {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+            }
         }
         .padding(.vertical, 4)
         .contentShape(.rect)
         .onHover { inside in
             withAnimation(.easeOut(duration: 0.12)) { hovering = inside }
         }
+        .fileDrag(fileURL)
+        .help(fileURL == nil ? "" : "Drag onto a device in Apple Configurator to restore with this IPSW")
         .contextMenu {
             Button(isKept ? "Stop Keeping Current" : "Keep Current") {
                 withAnimation(.ui) { model.toggleKept(row.id) }
@@ -202,7 +214,10 @@ struct DeviceRow: View {
                 Task { await model.downloadNow(row.id) }
             }
             .disabled(!canDownload)
-            if model.fileName(for: row.id) != nil {
+            if let url = fileURL {
+                Button("Show IPSW in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
                 Button("Delete Downloaded IPSW…", role: .destructive) {
                     model.requestDelete(model: row.id)
                 }
@@ -217,6 +232,53 @@ struct DeviceRow: View {
     }
 }
 
+extension View {
+    /// Lets the view be dragged out as a file, e.g. onto a device in Apple Configurator. No-op without a file.
+    @ViewBuilder
+    func fileDrag(_ url: URL?) -> some View {
+        if let url {
+            onDrag { NSItemProvider(object: url as NSURL) }
+        } else {
+            self
+        }
+    }
+}
+
 func plural(_ count: Int, _ word: String) -> String {
     "\(count) \(word)\(count == 1 ? "" : "s")"
+}
+
+/// Says plainly why IPSWs aren't reaching Apple Configurator, and what fixes it.
+struct ConfiguratorAccessBanner: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.configuratorBlocked, let access = model.configuratorAccess {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: access == .denied ? "lock.shield" : "questionmark.app.dashed")
+                    .font(.title2)
+                    .foregroundStyle(.orange)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(access == .denied ? "IPSWs can't reach Apple Configurator yet"
+                                           : "Apple Configurator hasn't been opened on this Mac")
+                        .fontWeight(.semibold)
+                    Text(access == .denied
+                         ? "macOS protects Configurator's folder. Turn on Full Disk Access for IPSW Mirror, then reopen the app. On managed Macs, a Jamf PPPC profile does this for you."
+                         : "Open Apple Configurator once so it creates its folders, then sync again.")
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 12)
+                if access == .denied {
+                    Button("Set Up…") { model.showConfiguratorSetup = true }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Check Again") { model.checkConfiguratorAccess() }
+                }
+            }
+            .padding(14)
+            .background(Color.orange.opacity(0.10), in: .rect(cornerRadius: 12))
+        }
+    }
 }

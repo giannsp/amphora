@@ -2,8 +2,10 @@ import Foundation
 
 /// Apple Configurator's firmware cache. An IPSW placed here is used for restores instead of downloading.
 ///
-/// UNVERIFIED: the path and the file naming Configurator expects still need a hands-on test
-/// (see "Open questions" in the project spec). Export is therefore off by default.
+/// macOS protects this folder (it lives in Configurator's group container). Writing to it needs
+/// Full Disk Access: granted by the user in System Settings, or by a Jamf PPPC profile
+/// (SystemPolicyAllFiles) for managed Macs. Without it every write fails with "permission denied"
+/// and macOS shows no prompt.
 public enum ConfiguratorCache {
     public static var firmwareDirectory: URL {
         FileManager.default.homeDirectoryForCurrentUser
@@ -11,12 +13,43 @@ public enum ConfiguratorCache {
                                     isDirectory: true)
     }
 
+    /// Opens Full Disk Access in System Settings.
+    public static let fullDiskAccessSettingsURL =
+        URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")!
+
+    public enum Access: Equatable, Sendable {
+        case granted
+        /// Apple Configurator has never run on this Mac for this user.
+        case configuratorNotFound
+        /// macOS privacy protection blocks the folder: Full Disk Access is needed.
+        case denied
+    }
+
+    /// Checks for real by creating the Firmware folder (harmless if it already exists).
+    public static func checkAccess() -> Access {
+        let fm = FileManager.default
+        let container = firmwareDirectory.deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        guard fm.fileExists(atPath: container.path) else { return .configuratorNotFound }
+        do {
+            try fm.createDirectory(at: firmwareDirectory, withIntermediateDirectories: true)
+            let probe = firmwareDirectory.appendingPathComponent(".ipswmirror-\(UUID().uuidString)")
+            try Data().write(to: probe)
+            try fm.removeItem(at: probe)
+            return .granted
+        } catch {
+            return .denied
+        }
+    }
+
     /// Copies a verified IPSW into the cache. On APFS the copy is a clone, so it costs no extra disk space
     /// as long as the store is on the same volume.
     public static func export(_ file: URL) throws {
         let fm = FileManager.default
         let destination = firmwareDirectory.appendingPathComponent(file.lastPathComponent)
-        guard !fm.fileExists(atPath: destination.path) else { return }
+        if fm.fileExists(atPath: destination.path) {
+            if FileDownloader.size(of: destination) == FileDownloader.size(of: file) { return }
+            try fm.removeItem(at: destination)
+        }
         try fm.createDirectory(at: firmwareDirectory, withIntermediateDirectories: true)
         try fm.copyItem(at: file, to: destination)
     }

@@ -13,6 +13,8 @@ struct OverviewView: View {
                     ErrorBanner(message: error)
                 }
 
+                ConfiguratorAccessBanner()
+
                 HeroCard(browse: browse)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
@@ -103,7 +105,9 @@ private struct HeroCard: View {
         }
         return HeroState(symbol: "checkmark.seal.fill", tint: .green,
                      title: kept == 1 ? "Your model is ready to restore" : "All \(kept) models are ready to restore",
-                     subtitle: "Every kept model has its latest signed IPSW on disk, verified.")
+                     subtitle: model.exportToConfigurator && !model.configuratorBlocked
+                         ? "Apple Configurator restores them without downloading."
+                         : "To restore, drag a model onto the device in Apple Configurator.")
     }
 
     var body: some View {

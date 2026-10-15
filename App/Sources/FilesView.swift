@@ -30,7 +30,7 @@ struct FilesView: View {
             ContentUnavailableView("No IPSWs downloaded", systemImage: "internaldrive",
                                    description: Text("Files appear here after a sync or a download."))
         } else {
-            Table(files, selection: $selection, sortOrder: $sortOrder) {
+            Table(of: AppModel.StoredFile.self, selection: $selection, sortOrder: $sortOrder) {
                 TableColumn("File", value: \.name) { file in
                     Text(file.name)
                         .lineLimit(1)
@@ -53,6 +53,11 @@ struct FilesView: View {
                         .monospacedDigit()
                 }
                 .width(min: 64, ideal: 80, max: 100)
+            } rows: {
+                ForEach(files) { file in
+                    TableRow(file)
+                        .itemProvider { NSItemProvider(object: model.store.root.appendingPathComponent(file.name) as NSURL) }
+                }
             }
             .contextMenu(forSelectionType: String.self) { names in
                 Button("Show in Finder") { reveal(names) }
