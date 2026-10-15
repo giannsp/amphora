@@ -10,7 +10,7 @@ public struct HTTPClient: Sendable {
 
     public func getJSON<T: Decodable>(_ type: T.Type, from url: URL) async throws -> T {
         var request = URLRequest(url: url, timeoutInterval: 60)
-        request.setValue(IPSWMirror.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)

@@ -1,4 +1,4 @@
-import IPSWMirrorCore
+import AmphoraCore
 import SwiftUI
 
 /// Models grouped by the OS release they get, newest first, so it's obvious which models stay on an older iOS.

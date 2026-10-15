@@ -2,13 +2,13 @@ import AppKit
 import SwiftUI
 
 @main
-struct IPSWMirrorApp: App {
+struct AmphoraApp: App {
     @NSApplicationDelegateAdaptor private var delegate: AppDelegate
 
     private var model: AppModel { delegate.model }
 
     var body: some Scene {
-        Window("IPSW Mirror", id: "main") {
+        Window("Amphora", id: "main") {
             ContentView()
                 .environment(model)
                 .frame(minWidth: 860, minHeight: 560)
@@ -28,7 +28,7 @@ struct IPSWMirrorApp: App {
                 .environment(model)
         } label: {
             Image(systemName: model.menuBarSymbol)
-                .accessibilityLabel("IPSW Mirror")
+                .accessibilityLabel("Amphora")
         }
         .menuBarExtraStyle(.window)
 

@@ -123,7 +123,7 @@ public actor SyncEngine {
                 await onEvent(.warning("Apple Configurator hasn't been opened on this Mac yet. Open it once, then sync again."))
             case .denied:
                 exportToConfigurator = false
-                await onEvent(.warning("macOS blocks Apple Configurator's folder. Give IPSW Mirror Full Disk Access, then sync again."))
+                await onEvent(.warning("macOS blocks Apple Configurator's folder. Give Amphora Full Disk Access, then sync again."))
             }
         }
 

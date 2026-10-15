@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Managed preferences for IPSW Mirror.
+  Managed preferences for Amphora.
   Jamf Pro: Configuration Profiles → Application & Custom Settings → Upload,
-  preference domain consulting.techne.ipswmirror. Remove the keys you don't want to enforce.
+  preference domain consulting.techne.amphora. Remove the keys you don't want to enforce.
   The Jamf API client secret is never set here: enter it once in the app (it stays in the Keychain).
 -->
 <plist version="1.0">
@@ -17,7 +17,7 @@
     <key>JamfManagedDevicesOnly</key>
     <true/>
     <key>StorePath</key>
-    <string>/Users/Shared/IPSW Mirror</string>
+    <string>/Users/Shared/Amphora</string>
     <key>PruneOldIPSWs</key>
     <true/>
     <key>ExportToConfigurator</key>

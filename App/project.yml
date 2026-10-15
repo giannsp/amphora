@@ -1,31 +1,33 @@
-# Generates IPSWMirror.xcodeproj — run `xcodegen` in this folder (brew install xcodegen).
+# Generates Amphora.xcodeproj — run `xcodegen` in this folder (brew install xcodegen).
 # The generated project is not committed; this file is the source of truth.
-name: IPSWMirror
+name: Amphora
 options:
   bundleIdPrefix: consulting.techne
   deploymentTarget:
     macOS: "14.0"
   createIntermediateGroups: true
 packages:
-  IPSWMirrorCore:
+  AmphoraCore:
     path: ..
 targets:
-  IPSWMirror:
+  Amphora:
     type: application
     scheme: {}
     platform: macOS
     sources:
       - path: Sources
+      - path: Resources
     dependencies:
-      - package: IPSWMirrorCore
-        product: IPSWMirrorCore
+      - package: AmphoraCore
+        product: AmphoraCore
     settings:
       base:
-        PRODUCT_NAME: IPSW Mirror
-        PRODUCT_BUNDLE_IDENTIFIER: consulting.techne.ipswmirror
+        PRODUCT_NAME: Amphora
+        PRODUCT_BUNDLE_IDENTIFIER: consulting.techne.amphora
         MARKETING_VERSION: 0.1.0
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
         INFOPLIST_KEY_NSHumanReadableCopyright: "MIT License"
         ENABLE_HARDENED_RUNTIME: YES

@@ -77,7 +77,7 @@ public struct JamfClient: Sendable {
         var request = URLRequest(url: credentials.url.appendingPathComponent("JSSResource/mobiledevices"), timeoutInterval: 120)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(IPSWMirror.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
         try Self.check(response)
@@ -126,7 +126,7 @@ public struct JamfClient: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(IPSWMirror.userAgent, forHTTPHeaderField: "User-Agent")
+        request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
         request.httpBody = Self.formBody([
             ("grant_type", "client_credentials"),
             ("client_id", credentials.clientID),

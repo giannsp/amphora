@@ -1,9 +1,9 @@
 import Foundation
-import IPSWMirrorCore
+import AmphoraCore
 import Observation
 import ServiceManagement
 
-/// App state. Settings live in the app's defaults domain (consulting.techne.ipswmirror),
+/// App state. Settings live in the app's defaults domain (consulting.techne.amphora),
 /// so a configuration profile can set them without code changes.
 @MainActor
 @Observable
@@ -209,6 +209,7 @@ final class AppModel {
     var isFetchingJamf = false
 
     init() {
+        Migration.runIfNeeded()
         selected = Set(defaults.stringArray(forKey: Key.selected) ?? [])
         storePath = defaults.string(forKey: Key.storePath) ?? Store.defaultRoot.path
         prune = defaults.object(forKey: Key.prune) as? Bool ?? true

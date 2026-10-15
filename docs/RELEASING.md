@@ -10,7 +10,7 @@ A checklist for cutting a release. Do every step, every time.
    - **Developer ID Installer** (signs the .pkg)
 3. Create an app-specific password at [account.apple.com](https://account.apple.com) → Sign-In and Security, then store notarization credentials:
    ```sh
-   xcrun notarytool store-credentials ipsw-mirror --apple-id <your Apple ID> --team-id <team ID>
+   xcrun notarytool store-credentials amphora --apple-id <your Apple ID> --team-id <team ID>
    ```
 4. `brew install xcodegen`
 
@@ -22,7 +22,7 @@ Check it all with a test package: `scripts/release.sh --unsigned` needs none of 
 
 1. **Test on a clean Mac.** Fresh store folder, sync two or three models, restore one device from the result.
 2. **Bump the version** in:
-   - `Sources/IPSWMirrorCore/Models.swift` (`IPSWMirror.version`)
+   - `Sources/AmphoraCore/Models.swift` (`AppInfo.version`)
    - `App/project.yml` (`MARKETING_VERSION`, and increase `CURRENT_PROJECT_VERSION`)
    - `CHANGELOG.md`: move the Unreleased items under `## [X.Y.Z] - YYYY-MM-DD`
 3. **Build:** `scripts/release.sh`. It refuses to run if the versions disagree or the changelog has no section. It runs the tests, signs, notarizes and staples, and writes everything to `dist/`.
@@ -33,7 +33,7 @@ Check it all with a test package: `scripts/release.sh --unsigned` needs none of 
    ```
 5. **Publish:**
    ```sh
-   gh release create vX.Y.Z dist/* --title "IPSW Mirror X.Y.Z" --notes-file <(awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
+   gh release create vX.Y.Z dist/* --title "Amphora X.Y.Z" --notes-file <(awk '/^## \[X.Y.Z\]/{f=1;next} /^## \[/{f=0} f' CHANGELOG.md)
    ```
 6. **Announce** notable releases in the MacAdmins Slack.
 

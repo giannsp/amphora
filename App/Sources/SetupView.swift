@@ -1,5 +1,5 @@
 import AppKit
-import IPSWMirrorCore
+import AmphoraCore
 import SwiftUI
 
 /// Guides the user through Full Disk Access, which macOS never prompts for.
@@ -20,9 +20,9 @@ struct ConfiguratorSetupView: View {
                     .frame(width: 44)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(granted ? "IPSW Mirror can reach Apple Configurator" : "Let IPSW Mirror reach Apple Configurator")
+                    Text(granted ? "Amphora can reach Apple Configurator" : "Let Amphora reach Apple Configurator")
                         .font(.title2.weight(.semibold))
-                    Text("So restores start without downloading, IPSW Mirror places each IPSW in Apple Configurator's folder. macOS protects that folder, and only you can allow access. macOS doesn't ask for this one, so here's how.")
+                    Text("So restores start without downloading, Amphora places each IPSW in Apple Configurator's folder. macOS protects that folder, and only you can allow access. macOS doesn't ask for this one, so here's how.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -34,7 +34,7 @@ struct ConfiguratorSetupView: View {
                         NSWorkspace.shared.open(ConfiguratorCache.fullDiskAccessSettingsURL)
                     }
                 }
-                SetupStep(number: 2, title: "Drag IPSW Mirror into the list", done: granted) {
+                SetupStep(number: 2, title: "Drag Amphora into the list", done: granted) {
                     DraggableAppIcon()
                 }
                 SetupStep(number: 3, title: "Switch it on, then choose Quit & Reopen", done: granted) {
@@ -144,6 +144,6 @@ private struct DraggableAppIcon: View {
         }
         .onDrag { NSItemProvider(object: Bundle.main.bundleURL as NSURL) }
         .help("Drag this icon into the Full Disk Access list in System Settings")
-        .accessibilityLabel("IPSW Mirror app icon, drag into the Full Disk Access list")
+        .accessibilityLabel("Amphora app icon, drag into the Full Disk Access list")
     }
 }

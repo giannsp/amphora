@@ -2,18 +2,18 @@
 import PackageDescription
 
 let package = Package(
-    name: "IPSWMirror",
+    name: "Amphora",
     platforms: [.macOS(.v14)],
     products: [
-        .library(name: "IPSWMirrorCore", targets: ["IPSWMirrorCore"]),
-        .executable(name: "ipsw-mirror", targets: ["ipsw-mirror"]),
+        .library(name: "AmphoraCore", targets: ["AmphoraCore"]),
+        .executable(name: "amphora", targets: ["amphora"]),
     ],
     targets: [
-        .target(name: "IPSWMirrorCore"),
-        .executableTarget(name: "ipsw-mirror", dependencies: ["IPSWMirrorCore"]),
+        .target(name: "AmphoraCore"),
+        .executableTarget(name: "amphora", dependencies: ["AmphoraCore"]),
         .testTarget(
-            name: "IPSWMirrorCoreTests",
-            dependencies: ["IPSWMirrorCore"],
+            name: "AmphoraCoreTests",
+            dependencies: ["AmphoraCore"],
             resources: [.copy("Fixtures")]
         ),
     ]

@@ -1,22 +1,22 @@
 #!/bin/zsh
 #
-# release.sh — build, sign, package and notarize an IPSW Mirror release.
+# release.sh — build, sign, package and notarize an Amphora release.
 #
 # Produces in dist/:
-#   IPSW-Mirror-<version>.pkg            app → /Applications, CLI → /usr/local/bin/ipsw-mirror
-#   IPSW-Mirror-<version>.pkg.sha256
-#   IPSW-Mirror-FullDiskAccess.mobileconfig   Jamf PPPC profile with this build's code requirement
+#   Amphora-<version>.pkg            app → /Applications, CLI → /usr/local/bin/amphora
+#   Amphora-<version>.pkg.sha256
+#   Amphora-FullDiskAccess.mobileconfig   Jamf PPPC profile with this build's code requirement
 #
 # One-time setup (see docs/RELEASING.md):
 #   - "Developer ID Application" and "Developer ID Installer" certificates in your login keychain
-#   - xcrun notarytool store-credentials ipsw-mirror --apple-id <id> --team-id <team>  (not for --no-notarize)
+#   - xcrun notarytool store-credentials amphora --apple-id <id> --team-id <team>  (not for --no-notarize)
 #
 # Usage:
 #   scripts/release.sh                 public release: Developer ID signed, notarized, stapled
 #   scripts/release.sh --no-notarize   Developer ID signed, not notarized: for Jamf deployments only
 #   scripts/release.sh --unsigned      local test package: no Developer ID, no notarization
 #
-# Env: TEAM_ID (detected from the certificate if unset), NOTARY_PROFILE (default ipsw-mirror),
+# Env: TEAM_ID (detected from the certificate if unset), NOTARY_PROFILE (default amphora),
 #      DEVELOPER_DIR to pick an Xcode.
 
 set -euo pipefail
@@ -24,9 +24,9 @@ set -euo pipefail
 ROOT=${0:A:h:h}
 BUILD="$ROOT/build"
 DIST="$ROOT/dist"
-BUNDLE_ID="consulting.techne.ipswmirror"
-APP_NAME="IPSW Mirror"
-NOTARY_PROFILE=${NOTARY_PROFILE:-ipsw-mirror}
+BUNDLE_ID="consulting.techne.amphora"
+APP_NAME="Amphora"
+NOTARY_PROFILE=${NOTARY_PROFILE:-amphora}
 UNSIGNED=0
 NOTARIZE=1
 for arg in "$@"; do
@@ -49,11 +49,11 @@ fail() { print -P "%F{red}error:%f $1" >&2; exit 1; }
 
 # ---------------- version: one source of truth, checked ----------------
 VERSION=$(awk -F': ' '/MARKETING_VERSION/ {print $2; exit}' "$ROOT/App/project.yml" | tr -d '"[:space:]')
-CORE_VERSION=$(sed -nE 's/.*static let version = "([^"]+)".*/\1/p' "$ROOT/Sources/IPSWMirrorCore/Models.swift")
+CORE_VERSION=$(sed -nE 's/.*static let version = "([^"]+)".*/\1/p' "$ROOT/Sources/AmphoraCore/Models.swift")
 [[ -n "$VERSION" ]] || fail "MARKETING_VERSION not found in App/project.yml"
 [[ "$VERSION" == "$CORE_VERSION" ]] || fail "Version mismatch: project.yml $VERSION, Models.swift $CORE_VERSION"
 grep -q "## \[$VERSION\]" "$ROOT/CHANGELOG.md" || fail "CHANGELOG.md has no section for $VERSION"
-PKG="$DIST/IPSW-Mirror-$VERSION.pkg"
+PKG="$DIST/Amphora-$VERSION.pkg"
 
 # ---------------- identities ----------------
 if (( UNSIGNED )); then
@@ -92,7 +92,7 @@ grep -E "Executed [0-9]+ tests" "$BUILD/test.log" | tail -1
 step "Building $APP_NAME $VERSION"
 command -v xcodegen >/dev/null || fail "xcodegen not found (brew install xcodegen)"
 (cd "$ROOT/App" && xcodegen -q)
-xcodebuild -project "$ROOT/App/IPSWMirror.xcodeproj" -scheme IPSWMirror -configuration Release \
+xcodebuild -project "$ROOT/App/Amphora.xcodeproj" -scheme Amphora -configuration Release \
     -destination "generic/platform=macOS" ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
     -derivedDataPath "$BUILD/dd" CODE_SIGNING_ALLOWED=NO build -quiet
 APP="$BUILD/$APP_NAME.app"
@@ -100,11 +100,11 @@ ditto "$BUILD/dd/Build/Products/Release/$APP_NAME.app" "$APP"
 lipo -info "$APP/Contents/MacOS/$APP_NAME"
 
 # ---------------- CLI (universal) ----------------
-step "Building ipsw-mirror CLI"
+step "Building amphora CLI"
 (cd "$ROOT" && swift build -c release --arch arm64 --arch x86_64 -q)
 BIN_DIR=$(cd "$ROOT" && swift build -c release --arch arm64 --arch x86_64 --show-bin-path)
-CLI="$BUILD/ipsw-mirror"
-cp "$BIN_DIR/ipsw-mirror" "$CLI"
+CLI="$BUILD/amphora"
+cp "$BIN_DIR/amphora" "$CLI"
 lipo -info "$CLI"
 
 # ---------------- sign ----------------
@@ -123,7 +123,7 @@ step "Packaging"
 PAYLOAD="$BUILD/payload"
 mkdir -p "$PAYLOAD/Applications" "$PAYLOAD/usr/local/bin"
 ditto "$APP" "$PAYLOAD/Applications/$APP_NAME.app"
-cp "$CLI" "$PAYLOAD/usr/local/bin/ipsw-mirror"
+cp "$CLI" "$PAYLOAD/usr/local/bin/amphora"
 
 # Install exactly where we say: don't "upgrade" a copy the user moved elsewhere.
 LOG="$BUILD/package.log"
@@ -155,7 +155,7 @@ REQUIREMENT=$(codesign -dr - "$APP" 2>&1 | sed -nE 's/^(# )?designated => //p')
 [[ -n "$REQUIREMENT" ]] || fail "Couldn't read the app's code requirement"
 xml_escape() { sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g' -e 's/"/\&quot;/g'; }
 REQ_XML=$(print -r -- "$REQUIREMENT" | xml_escape)
-PROFILE="$DIST/IPSW-Mirror-FullDiskAccess.mobileconfig"
+PROFILE="$DIST/Amphora-FullDiskAccess.mobileconfig"
 cat > "$PROFILE" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -173,7 +173,7 @@ cat > "$PROFILE" <<EOF
             <key>PayloadVersion</key>
             <integer>1</integer>
             <key>PayloadDisplayName</key>
-            <string>IPSW Mirror Full Disk Access</string>
+            <string>Amphora Full Disk Access</string>
             <key>Services</key>
             <dict>
                 <key>SystemPolicyAllFiles</key>
@@ -190,20 +190,20 @@ cat > "$PROFILE" <<EOF
                         <key>StaticCode</key>
                         <false/>
                         <key>Comment</key>
-                        <string>Lets IPSW Mirror place restore files in Apple Configurator's cache.</string>
+                        <string>Lets Amphora place restore files in Apple Configurator's cache.</string>
                     </dict>
                 </array>
             </dict>
         </dict>
     </array>
     <key>PayloadDisplayName</key>
-    <string>IPSW Mirror: Full Disk Access</string>
+    <string>Amphora: Full Disk Access</string>
     <key>PayloadDescription</key>
-    <string>Allows IPSW Mirror to place verified IPSW files in Apple Configurator's firmware cache.</string>
+    <string>Allows Amphora to place verified IPSW files in Apple Configurator's firmware cache.</string>
     <key>PayloadIdentifier</key>
     <string>$BUNDLE_ID.pppc</string>
     <key>PayloadOrganization</key>
-    <string>IPSW Mirror</string>
+    <string>Amphora</string>
     <key>PayloadScope</key>
     <string>System</string>
     <key>PayloadType</key>

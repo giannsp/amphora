@@ -1,5 +1,5 @@
 import AppKit
-import IPSWMirrorCore
+import AmphoraCore
 import SwiftUI
 
 // Motion rules (Apple's fluid-interface guidance, native edition):
@@ -385,7 +385,7 @@ struct ConfiguratorAccessBanner: View {
                                            : "Apple Configurator hasn't been opened on this Mac")
                         .fontWeight(.semibold)
                     Text(access == .denied
-                         ? "macOS protects Configurator's folder. Turn on Full Disk Access for IPSW Mirror, then reopen the app. On managed Macs, a Jamf PPPC profile does this for you."
+                         ? "macOS protects Configurator's folder. Turn on Full Disk Access for Amphora, then reopen the app. On managed Macs, a Jamf PPPC profile does this for you."
                          : "Open Apple Configurator once so it creates its folders, then sync again.")
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

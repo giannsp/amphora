@@ -9,7 +9,7 @@ labels: bug
 **What you expected**
 
 **Setup**
-- IPSW Mirror version:
+- Amphora version:
 - macOS version:
 - App or CLI:
 - Mode (curated / on-demand):

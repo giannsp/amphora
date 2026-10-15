@@ -36,7 +36,7 @@ struct MenuBarView: View {
                         .disabled(model.keptIDs.isEmpty && model.modelSource == .curated)
                 }
                 Spacer()
-                Button("Open IPSW Mirror") { openMainWindow() }
+                Button("Open Amphora") { openMainWindow() }
                     .buttonStyle(.borderedProminent)
             }
 

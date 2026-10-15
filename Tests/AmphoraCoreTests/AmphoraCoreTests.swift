@@ -1,6 +1,6 @@
 import Foundation
 import XCTest
-@testable import IPSWMirrorCore
+@testable import AmphoraCore
 
 final class SOFATests: XCTestCase {
     func testNewestSupportingMajorWins() throws {

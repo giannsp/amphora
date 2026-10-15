@@ -1,4 +1,4 @@
-import IPSWMirrorCore
+import AmphoraCore
 import SwiftUI
 
 /// The answer first: are restores ready? Then the numbers behind it, then what needs attention.
@@ -94,13 +94,13 @@ private struct HeroCard: View {
             return HeroState(symbol: "server.rack", tint: .secondary,
                              title: model.jamfConfigured ? "No supported models in Jamf Pro yet" : "Connect to Jamf Pro",
                              subtitle: model.jamfConfigured
-                                 ? "IPSW Mirror keeps every iPhone and iPad model in your inventory current."
+                                 ? "Amphora keeps every iPhone and iPad model in your inventory current."
                                  : "Add your Jamf Pro address and a read-only API client in Settings.")
         }
         if kept == 0 {
             return HeroState(symbol: "circle.dashed", tint: .secondary,
                          title: "Choose the models you support",
-                         subtitle: "IPSW Mirror keeps their restore files downloaded, verified and up to date.")
+                         subtitle: "Amphora keeps their restore files downloaded, verified and up to date.")
         }
         if model.failedCount > 0 {
             return HeroState(symbol: "exclamationmark.triangle.fill", tint: .red,

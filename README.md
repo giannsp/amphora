@@ -1,6 +1,10 @@
-# IPSW Mirror
+<p align="center"><img src="docs/images/icon.png" width="160" alt="Amphora icon"></p>
 
-Keeps the latest signed iOS and iPadOS restore files (IPSWs) on your service desk Mac, so restoring an iPhone or iPad never starts with a 12 GB download.
+# Amphora
+
+**IPSW restore files, stored and ready.** Amphora keeps the latest signed iOS and iPadOS restore files on your service desk Mac, so restoring an iPhone or iPad never starts with a 12 GB download.
+
+*An amphora is the painted Greek jar made to keep what you'll need later. The project comes from [Techne](https://techne.consulting): τέχνη, craft.*
 
 Free and open source (MIT). Built by an Apple admin, for Apple admins.
 
@@ -18,7 +22,7 @@ Several models usually share one IPSW, so 40 models might need only 15 files.
 
 ## What it deletes
 
-Pick a **dedicated folder** for IPSW Mirror. During a sync it deletes any `.ipsw` file in that folder that the selected models don't need. It never touches other file types, and in Apple Configurator's cache it only removes files it placed there itself.
+Pick a **dedicated folder** for Amphora. During a sync it deletes any `.ipsw` file in that folder that the selected models don't need. It never touches other file types, and in Apple Configurator's cache it only removes files it placed there itself.
 
 On-demand downloads of a model you haven't ticked are removed at the next sync.
 
@@ -30,25 +34,25 @@ On-demand downloads of a model you haven't ticked are removed at the next sync.
 
 ```sh
 swift build -c release
-.build/release/ipsw-mirror models --filter "iPhone 15"
-.build/release/ipsw-mirror sync --models iPhone16,1,iPhone16,2,iPad14,3 --dry-run
+.build/release/amphora models --filter "iPhone 15"
+.build/release/amphora sync --models iPhone16,1,iPhone16,2,iPad14,3 --dry-run
 ```
 
 ```text
-ipsw-mirror sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
-ipsw-mirror sync   --from-jamf          [--include-unmanaged] [same options as above]
-ipsw-mirror jamf   [--include-unmanaged]
-ipsw-mirror get    <model-identifier>   [--store <dir>] [--configurator]
-ipsw-mirror plan   --models <id,id,...> [--store <dir>]
-ipsw-mirror models [--filter <text>]
+amphora sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
+amphora sync   --from-jamf          [--include-unmanaged] [same options as above]
+amphora jamf   [--include-unmanaged]
+amphora get    <model-identifier>   [--store <dir>] [--configurator]
+amphora plan   --models <id,id,...> [--store <dir>]
+amphora models [--filter <text>]
 ```
 
-The default folder is `/Users/Shared/IPSW Mirror`.
+The default folder is `/Users/Shared/Amphora`.
 
 ## Using the app
 
 - **My Devices** is your fleet: models from Jamf Pro, or the ones you tick under **All Models**. Each shows whether its restore file is ready.
-- **Runs in the background.** IPSW Mirror opens at login and lives in the menu bar; closing the window keeps it syncing (every 6 hours by default, and at launch when a sync is due). Downloads keep the Mac from idle sleep until they finish. **Sync Now** (⌘R) any time.
+- **Runs in the background.** Amphora opens at login and lives in the menu bar; closing the window keeps it syncing (every 6 hours by default, and at launch when a sync is due). Downloads keep the Mac from idle sleep until they finish. **Sync Now** (⌘R) any time.
 - **Download now** (↓ on any row) fetches one model immediately. Use it for the odd device that walks in.
 - **Restore:** with Full Disk Access (below), IPSWs are placed in Apple Configurator's cache and its restores start without a download. Without it, drag a model (or a file from **Downloaded**) onto the device in Configurator.
 - **Downloaded** lists every IPSW on disk. Select files and press Delete to remove them; you're told which models use a file first.
@@ -58,21 +62,21 @@ Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example
 
 ## Jamf Pro
 
-Instead of ticking models by hand, let Jamf Pro decide: IPSW Mirror keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have.
+Instead of ticking models by hand, let Jamf Pro decide: Amphora keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have.
 
 1. In Jamf Pro → Settings → **API Roles and Clients**, create a role with only **Read Mobile Devices**.
 2. Create an API client with that role, enable it, and generate a client secret.
-3. In IPSW Mirror → Settings → Models, choose **Jamf Pro inventory**, enter the address, client ID and secret, and click **Test Connection**.
+3. In Amphora → Settings → Models, choose **Jamf Pro inventory**, enter the address, client ID and secret, and click **Test Connection**.
 
 What it does and doesn't do:
 
 - Reads model identifiers only (and whether each device is managed). No serial numbers, users or locations are stored.
 - Never writes anything to Jamf Pro.
 - The secret lives in your login Keychain, never in preferences or logs.
-- If Jamf Pro can't be reached, or returns no devices, IPSW Mirror keeps using the last good inventory and deletes nothing because of it.
+- If Jamf Pro can't be reached, or returns no devices, Amphora keeps using the last good inventory and deletes nothing because of it.
 - Models no signed iOS/iPadOS release supports any more are listed in Settings and skipped.
 
-From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `ipsw-mirror sync --from-jamf`.
+From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `amphora sync --from-jamf`.
 
 ## Deploying with Jamf Pro
 
@@ -80,7 +84,7 @@ From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET`
 
 ## Managed settings
 
-Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM configuration profile can set them. Values set by a profile show as locked in the app.
+Settings live in the `consulting.techne.amphora` preference domain, so an MDM configuration profile can set them. Values set by a profile show as locked in the app.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
@@ -95,11 +99,11 @@ Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM
 | `SyncIntervalHours` | integer | Hours between automatic syncs: 1, 3, 6, 12 or 24 (default `6`) |
 | `ShowInMenuBar` | boolean | Keep running in the menu bar when the window is closed (default `true`) |
 
-Open at login is registered on first launch. On managed Macs, a Managed Login Items payload (bundle ID `consulting.techne.ipswmirror`) keeps users from turning it off.
+Open at login is registered on first launch. On managed Macs, a Managed Login Items payload (bundle ID `consulting.techne.amphora`) keeps users from turning it off.
 
 ## Apple Configurator cache and Full Disk Access
 
-IPSW Mirror places each verified IPSW in Apple Configurator's firmware cache:
+Amphora places each verified IPSW in Apple Configurator's firmware cache:
 
 ```
 ~/Library/Group Containers/K36BKF7T3D.group.com.apple.configurator/Library/Caches/Firmware
@@ -107,16 +111,16 @@ IPSW Mirror places each verified IPSW in Apple Configurator's firmware cache:
 
 so Configurator's restores start immediately. On APFS the copy is a clone and uses no extra space.
 
-macOS protects that folder. IPSW Mirror needs **Full Disk Access** to write there, and macOS does not prompt for it; without it, writes simply fail. The app tells you when that happens.
+macOS protects that folder. Amphora needs **Full Disk Access** to write there, and macOS does not prompt for it; without it, writes simply fail. The app tells you when that happens.
 
-- **One Mac:** System Settings → Privacy & Security → Full Disk Access → add IPSW Mirror, then reopen it.
+- **One Mac:** System Settings → Privacy & Security → Full Disk Access → add Amphora, then reopen it.
 - **Managed Macs (Jamf Pro):** deploy a Privacy Preferences Policy Control profile:
 
 | Field | Value |
 | --- | --- |
-| Identifier | `consulting.techne.ipswmirror` |
+| Identifier | `consulting.techne.amphora` |
 | Identifier type | Bundle ID |
-| Code requirement | output of `codesign -dr - "/Applications/IPSW Mirror.app"` |
+| Code requirement | output of `codesign -dr - "/Applications/Amphora.app"` |
 | App or service | SystemPolicyAllFiles |
 | Access | Allow |
 
@@ -126,13 +130,13 @@ Full Disk Access is a broad permission. If your security team won't grant it, tu
 
 ## Privacy and network
 
-IPSW Mirror talks only to:
+Amphora talks only to:
 
 - `sofafeed.macadmins.io` (release data),
 - `api.ipsw.me` (download links and checksums),
 - Apple's CDN (the IPSWs themselves).
 
-No telemetry and no accounts. Requests carry a `User-Agent` of `IPSWMirror/<version>` so the services can see who's calling.
+No telemetry and no accounts. Requests carry a `User-Agent` of `Amphora/<version>` so the services can see who's calling.
 
 ## Roadmap
 
@@ -146,17 +150,17 @@ Requirements: macOS 14+, Xcode 16+, [XcodeGen](https://github.com/yonaskolb/Xcod
 
 ```sh
 swift test                      # engine tests
-cd App && xcodegen && open IPSWMirror.xcodeproj
+cd App && xcodegen && open Amphora.xcodeproj
 ```
 
-The engine (`Sources/IPSWMirrorCore`) is a Swift package with no UI. The app (`App/`) and the CLI (`Sources/ipsw-mirror`) are thin layers on top of it.
+The engine (`Sources/AmphoraCore`) is a Swift package with no UI. The app (`App/`) and the CLI (`Sources/amphora`) are thin layers on top of it.
 
 ## Credits
 
 - [SOFA](https://sofa.macadmins.io) by the MacAdmins Open Source community, for release data.
 - [ipsw.me](https://ipsw.me) for firmware links and checksums.
 
-Please be kind to both: IPSW Mirror makes one request at a time and only syncs every few hours.
+Please be kind to both: Amphora makes one request at a time and only syncs every few hours.
 
 ## License
 

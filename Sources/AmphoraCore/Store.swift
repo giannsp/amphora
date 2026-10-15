@@ -41,7 +41,7 @@ public struct Store: Sendable {
     }
 
     public static var defaultRoot: URL {
-        URL(fileURLWithPath: "/Users/Shared/IPSW Mirror", isDirectory: true)
+        URL(fileURLWithPath: "/Users/Shared/Amphora", isDirectory: true)
     }
 
     var stateDirectory: URL { root.appendingPathComponent(".state", isDirectory: true) }

@@ -1,5 +1,5 @@
 import AppKit
-import IPSWMirrorCore
+import AmphoraCore
 import ServiceManagement
 import SwiftUI
 
@@ -60,7 +60,7 @@ struct SettingsView: View {
                 Text("Models")
             } footer: {
                 if model.modelSource == .jamf {
-                    Text("Create an API Role with only \"Read Mobile Devices\" and an API Client using it (Jamf Pro → Settings → API Roles and Clients). IPSW Mirror reads model identifiers only, and never changes anything in Jamf Pro. The secret is stored in your Keychain.")
+                    Text("Create an API Role with only \"Read Mobile Devices\" and an API Client using it (Jamf Pro → Settings → API Roles and Clients). Amphora reads model identifiers only, and never changes anything in Jamf Pro. The secret is stored in your Keychain.")
                         .foregroundStyle(.secondary)
                 }
             }
@@ -110,7 +110,7 @@ struct SettingsView: View {
             } header: {
                 Text("Apple Configurator")
             } footer: {
-                Text("Restores in Apple Configurator then start without a download. On APFS the copy is a clone and uses no extra space. macOS protects Configurator's folder, so IPSW Mirror needs Full Disk Access; on managed Macs a Jamf PPPC profile grants it.")
+                Text("Restores in Apple Configurator then start without a download. On APFS the copy is a clone and uses no extra space. macOS protects Configurator's folder, so Amphora needs Full Disk Access; on managed Macs a Jamf PPPC profile grants it.")
                     .foregroundStyle(.secondary)
             }
 
@@ -136,12 +136,12 @@ struct SettingsView: View {
             } header: {
                 Text("Background")
             } footer: {
-                Text("With the menu bar on, closing the window keeps IPSW Mirror syncing in the background. Downloads keep the Mac from idle sleep until they finish.")
+                Text("With the menu bar on, closing the window keeps Amphora syncing in the background. Downloads keep the Mac from idle sleep until they finish.")
                     .foregroundStyle(.secondary)
             }
 
             Section("About") {
-                LabeledContent("Version", value: IPSWMirror.version)
+                LabeledContent("Version", value: AppInfo.version)
                 LabeledContent("Release data") {
                     Link("SOFA by MacAdmins", destination: URL(string: "https://sofa.macadmins.io")!)
                 }

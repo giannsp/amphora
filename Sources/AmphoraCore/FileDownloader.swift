@@ -35,7 +35,7 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 12 * 60 * 60
-        config.httpAdditionalHeaders = ["User-Agent": IPSWMirror.userAgent]
+        config.httpAdditionalHeaders = ["User-Agent": AppInfo.userAgent]
         let queue = OperationQueue()
         queue.maxConcurrentOperationCount = 1
         session = URLSession(configuration: config, delegate: self, delegateQueue: queue)

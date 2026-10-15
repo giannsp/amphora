@@ -10,11 +10,11 @@ Open an issue with the bug template. Include your macOS version, which mode you 
 
 1. Open an issue first for anything bigger than a small fix, so we can agree on the approach.
 2. Fork, branch from `main`, and keep one change per pull request.
-3. Run `swift test` and build the app (`cd App && xcodegen && xcodebuild -scheme IPSWMirror build`).
+3. Run `swift test` and build the app (`cd App && xcodegen && xcodebuild -scheme Amphora build`).
 4. Add a line under **Unreleased** in `CHANGELOG.md`.
 
 ## Ground rules
 
-- The engine (`Sources/IPSWMirrorCore`) has no UI code and no third-party dependencies. Keep it that way.
+- The engine (`Sources/AmphoraCore`) has no UI code and no third-party dependencies. Keep it that way.
 - Anything that deletes files must be safe by default: dry-run first, never delete what we didn't create.
 - Be polite to upstream services: one request at a time, identified User-Agent, no tighter polling.

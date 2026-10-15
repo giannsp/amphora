@@ -71,7 +71,7 @@ public enum MirrorError: LocalizedError, Sendable {
     }
 }
 
-public enum IPSWMirror {
+public enum AppInfo {
     public static let version = "0.1.0"
-    public static let userAgent = "IPSWMirror/\(version)"
+    public static let userAgent = "Amphora/\(version)"
 }

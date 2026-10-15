@@ -1,5 +1,5 @@
 import AppKit
-import IPSWMirrorCore
+import AmphoraCore
 import SwiftUI
 
 enum Pane: Hashable {

@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- Renamed to **Amphora**, after the Greek painted jar made to keep what you'll need later. New bundle ID `consulting.techne.amphora`, preference domain, Keychain item and CLI name (`amphora`). Settings, the Jamf secret and an existing download folder carry over automatically. Managed preferences and PPPC profiles must be re-scoped to the new bundle ID.
+
 ## [0.1.0] - 2026-10-15
 
 First release. Signed with Developer ID, not yet notarized: deploy it with Jamf Pro (packages Jamf installs aren't quarantined). A notarized build will follow before public downloads are recommended.

@@ -21,5 +21,5 @@ jobs:
           brew install xcodegen
           cd App
           xcodegen
-          xcodebuild -project IPSWMirror.xcodeproj -scheme IPSWMirror -configuration Release \
+          xcodebuild -project Amphora.xcodeproj -scheme Amphora -configuration Release \
             CODE_SIGNING_ALLOWED=NO build

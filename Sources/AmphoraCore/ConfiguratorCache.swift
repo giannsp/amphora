@@ -32,7 +32,7 @@ public enum ConfiguratorCache {
         guard fm.fileExists(atPath: container.path) else { return .configuratorNotFound }
         do {
             try fm.createDirectory(at: firmwareDirectory, withIntermediateDirectories: true)
-            let probe = firmwareDirectory.appendingPathComponent(".ipswmirror-\(UUID().uuidString)")
+            let probe = firmwareDirectory.appendingPathComponent(".amphora-\(UUID().uuidString)")
             try Data().write(to: probe)
             try fm.removeItem(at: probe)
             return .granted

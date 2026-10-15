@@ -1,16 +1,16 @@
 import Foundation
-import IPSWMirrorCore
+import AmphoraCore
 
 let usage = """
-ipsw-mirror \(IPSWMirror.version) — keep the latest signed iOS/iPadOS IPSWs on disk
+amphora \(AppInfo.version) — keep the latest signed iOS/iPadOS IPSWs on disk
 
 USAGE
-  ipsw-mirror sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
-  ipsw-mirror sync   --from-jamf          [--include-unmanaged] [same options as above]
-  ipsw-mirror jamf   [--include-unmanaged]
-  ipsw-mirror get    <model-identifier>   [--store <dir>] [--configurator]
-  ipsw-mirror plan   --models <id,id,...> [--store <dir>]
-  ipsw-mirror models [--filter <text>]
+  amphora sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
+  amphora sync   --from-jamf          [--include-unmanaged] [same options as above]
+  amphora jamf   [--include-unmanaged]
+  amphora get    <model-identifier>   [--store <dir>] [--configurator]
+  amphora plan   --models <id,id,...> [--store <dir>]
+  amphora models [--filter <text>]
 
   sync    Download what the model list needs, then delete IPSWs it no longer needs.
           Cleanup only runs when every model resolved and downloaded.
