@@ -95,16 +95,14 @@ struct ContentView: View {
                 .environment(model)
         }
         .task {
+            // Syncing itself is scheduled by AppModel and runs with or without this window.
             model.checkConfiguratorAccess()
             if model.shouldOfferConfiguratorSetup { model.showConfiguratorSetup = true }
-            await model.load()
-            // Keep current while the app is open. Background sync without the app arrives in v0.3.
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(AppModel.syncInterval))
-                guard !Task.isCancelled else { break }
-                await model.load()
-                await model.syncSelected()
-            }
+        }
+        .onAppear { NSApp.setActivationPolicy(.regular) }
+        .onDisappear {
+            // Window closed: keep working from the menu bar, without a Dock icon.
+            if model.showInMenuBar { NSApp.setActivationPolicy(.accessory) }
         }
     }
 }

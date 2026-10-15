@@ -1,6 +1,7 @@
 import Foundation
 import IPSWMirrorCore
 import Observation
+import ServiceManagement
 
 /// App state. Settings live in the app's defaults domain (consulting.techne.ipswmirror),
 /// so a configuration profile can set them without code changes.
@@ -72,7 +73,7 @@ final class AppModel {
         return (models, parts.dropFirst().first.map(String.init))
     }
 
-    static let syncInterval: TimeInterval = 6 * 60 * 60
+    static let syncIntervalChoices = [1, 3, 6, 12, 24]
 
     /// Where the list of models to keep current comes from.
     enum ModelSource: String, CaseIterable, Identifiable {
@@ -95,6 +96,9 @@ final class AppModel {
         static let jamfCounts = "JamfLastInventory"
         static let jamfFetched = "JamfLastInventoryDate"
         static let legacyTargets = "LegacyModelVersions"
+        static let syncHours = "SyncIntervalHours"
+        static let showInMenuBar = "ShowInMenuBar"
+        static let loginItemOffered = "LoginItemOffered"
     }
 
     private let defaults = UserDefaults.standard
@@ -187,6 +191,20 @@ final class AppModel {
         didSet { defaults.set(jamfFetched, forKey: Key.jamfFetched) }
     }
     var jamfError: String?
+
+    // Background
+    /// Hours between automatic syncs.
+    var syncIntervalHours: Int {
+        didSet { defaults.set(syncIntervalHours, forKey: Key.syncHours) }
+    }
+    var syncInterval: TimeInterval { TimeInterval(max(1, syncIntervalHours)) * 3600 }
+    /// Keep running in the menu bar when the window is closed.
+    var showInMenuBar: Bool {
+        didSet { defaults.set(showInMenuBar, forKey: Key.showInMenuBar) }
+    }
+    var loginItemStatus: SMAppService.Status = SMAppService.mainApp.status
+    var loginItemError: String?
+    private var schedulerTask: Task<Void, Never>?
     var jamfSecretSaved = false
     var isFetchingJamf = false
 
@@ -204,6 +222,8 @@ final class AppModel {
         jamfCounts = defaults.dictionary(forKey: Key.jamfCounts) as? [String: Int] ?? [:]
         jamfFetched = defaults.object(forKey: Key.jamfFetched) as? Date
         legacyTargets = defaults.dictionary(forKey: Key.legacyTargets) as? [String: String] ?? [:]
+        syncIntervalHours = defaults.object(forKey: Key.syncHours) as? Int ?? 6
+        showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
         jamfSecretSaved = !jamfClientID.isEmpty && Keychain.secret(for: jamfClientID) != nil
     }
 
@@ -321,7 +341,64 @@ final class AppModel {
     var readyCount: Int { keptRows.filter { status[$0.id]?.isReady == true }.count }
     var failedCount: Int { keptRows.filter { status[$0.id]?.isFailed == true }.count }
     var attentionRows: [Row] { keptRows.filter { status[$0.id]?.isReady != true } }
-    var nextSync: Date? { lastSync?.addingTimeInterval(Self.syncInterval) }
+    var nextSync: Date? { lastSync?.addingTimeInterval(syncInterval) }
+
+    /// Menu bar icon: what state the restore files are in, at a glance.
+    var menuBarSymbol: String {
+        if isBusy { return "arrow.down.circle" }
+        if failedCount > 0 || configuratorBlocked || (modelSource == .jamf && jamfError != nil) {
+            return "exclamationmark.circle"
+        }
+        if keptRows.isEmpty { return "circle.dashed" }
+        return readyCount == keptRows.count ? "checkmark.circle" : "circle.bottomhalf.filled"
+    }
+
+    var isSyncDue: Bool {
+        guard let lastSync else { return true }
+        return Date().timeIntervalSince(lastSync) >= syncInterval
+    }
+
+    // MARK: Background
+
+    /// Runs for the life of the app, window or not: syncs at launch when due, then whenever the interval passes.
+    /// Checks every 15 minutes, so a Mac that slept through a due time catches up soon after waking.
+    func startScheduler() {
+        guard schedulerTask == nil else { return }
+        schedulerTask = Task { [self] in
+            await load()
+            var releasesFresh = true
+            while !Task.isCancelled {
+                let hasModels = modelSource == .jamf ? jamfConfigured : !selected.isEmpty
+                if hasModels && isSyncDue && !isBusy {
+                    if !releasesFresh { await load() }   // pick up releases published since the last check
+                    await syncSelected()
+                }
+                releasesFresh = false
+                try? await Task.sleep(for: .seconds(15 * 60))
+            }
+        }
+    }
+
+    var openAtLogin: Bool { loginItemStatus == .enabled || loginItemStatus == .requiresApproval }
+
+    func setOpenAtLogin(_ on: Bool) {
+        do {
+            if on { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            loginItemError = nil
+        } catch {
+            loginItemError = error.localizedDescription
+        }
+        loginItemStatus = SMAppService.mainApp.status
+    }
+
+    /// The first launch turns on Open at Login, since a service desk tool must survive reboots.
+    /// macOS tells the user it added a login item; the setting is in Settings › Background.
+    func registerLoginItemOnFirstLaunch() {
+        loginItemStatus = SMAppService.mainApp.status
+        guard !defaults.bool(forKey: Key.loginItemOffered) else { return }
+        defaults.set(true, forKey: Key.loginItemOffered)
+        if loginItemStatus != .enabled { setOpenAtLogin(true) }
+    }
 
     var latestVersion: String? {
         rows.map(\.targetVersion).max { $0.compare($1, options: .numeric) == .orderedAscending }
@@ -522,6 +599,10 @@ final class AppModel {
         for id in options.models { status[id] = .queued }
 
         let engine = SyncEngine(store: store)
+        // Don't let idle sleep cut a 12 GB download short. The display may still sleep.
+        let activity = ProcessInfo.processInfo.beginActivity(
+            options: [.userInitiated, .idleSystemSleepDisabled], reason: "Downloading IPSW files")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
         // AppModel lives as long as the app, so capturing it strongly is fine.
         let task = Task { [self] in
             do {

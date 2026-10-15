@@ -47,7 +47,8 @@ The default folder is `/Users/Shared/IPSW Mirror`.
 
 ## Using the app
 
-- **Tick** the models you want kept current. They sync on launch, every 6 hours while the app is open, and on **Sync Now** (⌘R).
+- **My Devices** is your fleet: models from Jamf Pro, or the ones you tick under **All Models**. Each shows whether its restore file is ready.
+- **Runs in the background.** IPSW Mirror opens at login and lives in the menu bar; closing the window keeps it syncing (every 6 hours by default, and at launch when a sync is due). Downloads keep the Mac from idle sleep until they finish. **Sync Now** (⌘R) any time.
 - **Download now** (↓ on any row) fetches one model immediately. Use it for the odd device that walks in.
 - **Restore:** with Full Disk Access (below), IPSWs are placed in Apple Configurator's cache and its restores start without a download. Without it, drag a model (or a file from **Downloaded**) onto the device in Configurator.
 - **Downloaded** lists every IPSW on disk. Select files and press Delete to remove them; you're told which models use a file first.
@@ -87,6 +88,10 @@ Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM
 | `StorePath` | string | Folder for IPSWs |
 | `PruneOldIPSWs` | boolean | Delete IPSWs no longer needed (default `true`) |
 | `ExportToConfigurator` | boolean | Place IPSWs in Apple Configurator's cache (default `true`) |
+| `SyncIntervalHours` | integer | Hours between automatic syncs: 1, 3, 6, 12 or 24 (default `6`) |
+| `ShowInMenuBar` | boolean | Keep running in the menu bar when the window is closed (default `true`) |
+
+Open at login is registered on first launch. On managed Macs, a Managed Login Items payload (bundle ID `consulting.techne.ipswmirror`) keeps users from turning it off.
 
 ## Apple Configurator cache and Full Disk Access
 
@@ -129,7 +134,7 @@ No telemetry and no accounts. Requests carry a `User-Agent` of `IPSWMirror/<vers
 
 - **v0.1 — Usable without Jamf.** Curated and on-demand modes, app and CLI, verify and prune, drag to restore, manual delete.
 - **v0.2 — Jamf-driven.** Model list from Jamf Pro inventory through a read-only API client, Keychain storage *(done)*; signed and notarized `.pkg`.
-- **v0.3 — Runs on its own.** Menu bar agent with background sync, notifications, Universal Mac IPSWs for Apple Silicon.
+- **v0.3 — Runs on its own.** Menu bar, open at login, background sync *(done)*; notifications, Universal Mac IPSWs for Apple Silicon.
 
 ## Building from source
 

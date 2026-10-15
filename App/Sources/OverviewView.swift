@@ -65,7 +65,7 @@ struct OverviewView: View {
     }
 
     private var nextSyncDetail: String {
-        guard let next = model.nextSync, !model.keptIDs.isEmpty else { return "Every 6 hours while open" }
+        guard let next = model.nextSync, !model.keptIDs.isEmpty else { return "Every \(model.syncIntervalHours) hours" }
         return next < Date() ? "Next: due now" : "Next: \(next.formatted(date: .omitted, time: .shortened))"
     }
 }

@@ -1,8 +1,11 @@
+import AppKit
 import SwiftUI
 
 @main
 struct IPSWMirrorApp: App {
-    @State private var model = AppModel()
+    @NSApplicationDelegateAdaptor private var delegate: AppDelegate
+
+    private var model: AppModel { delegate.model }
 
     var body: some Scene {
         Window("IPSW Mirror", id: "main") {
@@ -19,9 +22,52 @@ struct IPSWMirrorApp: App {
             }
         }
 
+        MenuBarExtra(isInserted: Binding(get: { model.showInMenuBar },
+                                         set: { model.showInMenuBar = $0 })) {
+            MenuBarView()
+                .environment(model)
+        } label: {
+            Image(systemName: model.menuBarSymbol)
+                .accessibilityLabel("IPSW Mirror")
+        }
+        .menuBarExtraStyle(.window)
+
         Settings {
             SettingsView()
                 .environment(model)
         }
+    }
+}
+
+/// Owns the model so it outlives every window, and starts the background scheduler at launch.
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let model = AppModel()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        model.registerLoginItemOnFirstLaunch()
+        model.startScheduler()
+
+        // Started by macOS at login: stay in the menu bar instead of opening the window.
+        if launchedAsLoginItem && model.showInMenuBar {
+            DispatchQueue.main.async {
+                for window in NSApp.windows where window.identifier?.rawValue.contains("main") == true {
+                    window.close()
+                }
+                NSApp.setActivationPolicy(.accessory)
+            }
+        }
+    }
+
+    /// With the menu bar item on, closing the window keeps the app (and its schedule) running.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        !model.showInMenuBar
+    }
+
+    private var launchedAsLoginItem: Bool {
+        guard let event = NSAppleEventManager.shared().currentAppleEvent,
+              event.eventID == AEEventID(kAEOpenApplication) else { return false }
+        return event.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue
+            == OSType(keyAELaunchedAsLogInItem)
     }
 }

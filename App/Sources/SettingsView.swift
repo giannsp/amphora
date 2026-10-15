@@ -1,5 +1,6 @@
 import AppKit
 import IPSWMirrorCore
+import ServiceManagement
 import SwiftUI
 
 struct SettingsView: View {
@@ -110,6 +111,32 @@ struct SettingsView: View {
                 Text("Apple Configurator")
             } footer: {
                 Text("Restores in Apple Configurator then start without a download. On APFS the copy is a clone and uses no extra space. macOS protects Configurator's folder, so IPSW Mirror needs Full Disk Access; on managed Macs a Jamf PPPC profile grants it.")
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Toggle("Open at login", isOn: Binding(get: { model.openAtLogin },
+                                                      set: { model.setOpenAtLogin($0) }))
+                if model.loginItemStatus == .requiresApproval {
+                    LabeledContent("Needs approval") {
+                        Button("Open Login Items Settings") { SMAppService.openSystemSettingsLoginItems() }
+                    }
+                }
+                if let error = model.loginItemError {
+                    Text(error)
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                }
+                Toggle("Keep running in the menu bar", isOn: $model.showInMenuBar)
+                Picker("Sync every", selection: $model.syncIntervalHours) {
+                    ForEach(AppModel.syncIntervalChoices, id: \.self) { hours in
+                        Text(hours == 1 ? "hour" : "\(hours) hours").tag(hours)
+                    }
+                }
+            } header: {
+                Text("Background")
+            } footer: {
+                Text("With the menu bar on, closing the window keeps IPSW Mirror syncing in the background. Downloads keep the Mac from idle sleep until they finish.")
                     .foregroundStyle(.secondary)
             }
 
