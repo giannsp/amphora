@@ -15,6 +15,12 @@ struct AmphoraApp: App {
         }
         .defaultSize(width: 1040, height: 700)
         .commands {
+            CommandGroup(after: .appSettings) {
+                Button("Setup Assistant…") {
+                    NSApp.setActivationPolicy(.regular)
+                    model.showOnboarding = true
+                }
+            }
             CommandGroup(after: .newItem) {
                 Button("Sync Now") { Task { await model.syncSelected() } }
                     .keyboardShortcut("r")
@@ -45,6 +51,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let model = AppModel()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        Notifier.shared.install()
+        // Set up before notifications existed: ask once now. New users are asked in the setup assistant.
+        if model.notify && model.onboardingCompleted {
+            Task {
+                if await Notifier.shared.authorizationStatus() == .notDetermined {
+                    await Notifier.shared.requestAuthorization()
+                }
+            }
+        }
         model.registerLoginItemOnFirstLaunch()
         model.startScheduler()
 

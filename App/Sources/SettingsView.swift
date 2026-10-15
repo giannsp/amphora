@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var secret = ""
     @State private var testResult: String?
+    @State private var notificationsDenied = false
 
     var body: some View {
         @Bindable var model = model
@@ -128,6 +129,16 @@ struct SettingsView: View {
                         .foregroundStyle(.orange)
                 }
                 Toggle("Keep running in the menu bar", isOn: $model.showInMenuBar)
+                Toggle("Notify me when new restore files are ready", isOn: $model.notify)
+                    .onChange(of: model.notify) { _, on in
+                        if on { Task { await Notifier.shared.requestAuthorization(); await checkNotifications() } }
+                    }
+                if model.notify && notificationsDenied {
+                    LabeledContent("Notifications are off for Amphora in System Settings") {
+                        Button("Open Notification Settings") { NSWorkspace.shared.open(Notifier.settingsURL) }
+                    }
+                    .foregroundStyle(.orange)
+                }
                 Picker("Sync every", selection: $model.syncIntervalHours) {
                     ForEach(AppModel.syncIntervalChoices, id: \.self) { hours in
                         Text(hours == 1 ? "hour" : "\(hours) hours").tag(hours)
@@ -154,6 +165,7 @@ struct SettingsView: View {
         .onAppear { model.checkConfiguratorAccess() }
         .frame(width: 600)
         .fixedSize(horizontal: false, vertical: true)
+        .task { await checkNotifications() }
         .onChange(of: model.modelSource) { _, source in
             if source == .jamf && model.jamfConfigured { Task { await model.refreshJamf() } }
         }
@@ -178,6 +190,10 @@ struct SettingsView: View {
             Text("Not checked yet")
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func checkNotifications() async {
+        notificationsDenied = await Notifier.shared.authorizationStatus() == .denied
     }
 
     private func saveSecret() {

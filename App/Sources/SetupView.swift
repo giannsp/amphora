@@ -123,7 +123,7 @@ private struct SetupStep<Accessory: View>: View {
 }
 
 /// The app's own icon, draggable into the Full Disk Access list.
-private struct DraggableAppIcon: View {
+struct DraggableAppIcon: View {
     @State private var hovering = false
 
     var body: some View {

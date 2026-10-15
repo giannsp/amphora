@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Setup assistant on first launch (and from the app menu): choose Jamf Pro inventory or your own models, connect and test the Jamf Pro API client with step-by-step help, grant Full Disk Access for Apple Configurator, set background behaviour and the download folder, then download straight away.
+- Notifications: "iOS 27.1 is ready" when a sync downloaded new restore files (grouped by version, naming the models), and when downloads failed. Shown only while Amphora isn't the frontmost app; clicking one opens Amphora. Toggle in Settings and in the setup assistant.
+- App icon: a black-figure amphora with an iPhone painted on it.
+
 ### Changed
 
 - Renamed to **Amphora**, after the Greek painted jar made to keep what you'll need later. New bundle ID `consulting.techne.amphora`, preference domain, Keychain item and CLI name (`amphora`). Settings, the Jamf secret and an existing download folder carry over automatically. Managed preferences and PPPC profiles must be re-scoped to the new bundle ID.

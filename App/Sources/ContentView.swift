@@ -12,6 +12,7 @@ enum Pane: Hashable {
 
 struct ContentView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.openWindow) private var openWindow
     @State private var pane: Pane? = .overview
 
     var body: some View {
@@ -89,6 +90,12 @@ struct ContentView: View {
         .onChange(of: pane) { _, pane in
             if pane == .activity { model.unseenWarnings = 0 }
         }
+        .sheet(isPresented: Binding(get: { model.showOnboarding },
+                                    set: { model.showOnboarding = $0 })) {
+            OnboardingView()
+                .environment(model)
+                .interactiveDismissDisabled()
+        }
         .sheet(isPresented: Binding(get: { model.showConfiguratorSetup },
                                     set: { model.showConfiguratorSetup = $0 })) {
             ConfiguratorSetupView()
@@ -97,9 +104,17 @@ struct ContentView: View {
         .task {
             // Syncing itself is scheduled by AppModel and runs with or without this window.
             model.checkConfiguratorAccess()
-            if model.shouldOfferConfiguratorSetup { model.showConfiguratorSetup = true }
+            if !model.onboardingCompleted {
+                model.showOnboarding = true
+            } else if model.shouldOfferConfiguratorSetup {
+                model.showConfiguratorSetup = true
+            }
         }
-        .onAppear { NSApp.setActivationPolicy(.regular) }
+        .onAppear {
+            NSApp.setActivationPolicy(.regular)
+            let open = openWindow
+            Notifier.shared.openMainWindow = { open(id: "main") }
+        }
         .onDisappear {
             // Window closed: keep working from the menu bar, without a Dock icon.
             if model.showInMenuBar { NSApp.setActivationPolicy(.accessory) }

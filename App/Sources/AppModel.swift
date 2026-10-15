@@ -99,6 +99,8 @@ final class AppModel {
         static let syncHours = "SyncIntervalHours"
         static let showInMenuBar = "ShowInMenuBar"
         static let loginItemOffered = "LoginItemOffered"
+        static let onboardingCompleted = "OnboardingCompleted"
+        static let notify = "NotifyNewReleases"
     }
 
     private let defaults = UserDefaults.standard
@@ -203,6 +205,18 @@ final class AppModel {
         didSet { defaults.set(showInMenuBar, forKey: Key.showInMenuBar) }
     }
     var loginItemStatus: SMAppService.Status = SMAppService.mainApp.status
+    /// The first-launch setup assistant.
+    var showOnboarding = false
+    /// Post a notification when new restore files are ready, or downloads fail.
+    var notify: Bool {
+        didSet { defaults.set(notify, forKey: Key.notify) }
+    }
+    private var runDownloads: [(firmware: Firmware, models: [String])] = []
+    private var runFailures = 0
+    private var userCancelled = false
+    var onboardingCompleted: Bool {
+        didSet { defaults.set(onboardingCompleted, forKey: Key.onboardingCompleted) }
+    }
     var loginItemError: String?
     private var schedulerTask: Task<Void, Never>?
     var jamfSecretSaved = false
@@ -225,6 +239,8 @@ final class AppModel {
         legacyTargets = defaults.dictionary(forKey: Key.legacyTargets) as? [String: String] ?? [:]
         syncIntervalHours = defaults.object(forKey: Key.syncHours) as? Int ?? 6
         showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
+        onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
+        notify = defaults.object(forKey: Key.notify) as? Bool ?? true
         jamfSecretSaved = !jamfClientID.isEmpty && Keychain.secret(for: jamfClientID) != nil
     }
 
@@ -275,6 +291,15 @@ final class AppModel {
         } catch {
             jamfError = "Couldn't save the secret in the Keychain. \(error.localizedDescription)"
         }
+    }
+
+    /// Called by the setup assistant's last step.
+    func completeOnboarding(openAtLogin wantsLogin: Bool) {
+        if wantsLogin != openAtLogin { setOpenAtLogin(wantsLogin) }
+        defaults.set(true, forKey: Key.loginItemOffered)
+        configuratorSetupDismissed = true   // Full Disk Access was covered in the assistant
+        onboardingCompleted = true
+        showOnboarding = false
     }
 
     /// For Jamf models current releases dropped, finds the final version Apple still signs.
@@ -369,7 +394,7 @@ final class AppModel {
             await load()
             var releasesFresh = true
             while !Task.isCancelled {
-                let hasModels = modelSource == .jamf ? jamfConfigured : !selected.isEmpty
+                let hasModels = onboardingCompleted && (modelSource == .jamf ? jamfConfigured : !selected.isEmpty)
                 if hasModels && isSyncDue && !isBusy {
                     if !releasesFresh { await load() }   // pick up releases published since the last check
                     await syncSelected()
@@ -396,7 +421,7 @@ final class AppModel {
     /// macOS tells the user it added a login item; the setting is in Settings › Background.
     func registerLoginItemOnFirstLaunch() {
         loginItemStatus = SMAppService.mainApp.status
-        guard !defaults.bool(forKey: Key.loginItemOffered) else { return }
+        guard onboardingCompleted, !defaults.bool(forKey: Key.loginItemOffered) else { return }
         defaults.set(true, forKey: Key.loginItemOffered)
         if loginItemStatus != .enabled { setOpenAtLogin(true) }
     }
@@ -585,6 +610,7 @@ final class AppModel {
     }
 
     func cancel() {
+        userCancelled = true
         currentTask?.cancel()
     }
 
@@ -597,6 +623,9 @@ final class AppModel {
         isBusy = true
         lastError = nil
         progress = SyncProgress()
+        runDownloads = []
+        runFailures = 0
+        userCancelled = false
         for id in options.models { status[id] = .queued }
 
         let engine = SyncEngine(store: store)
@@ -628,6 +657,11 @@ final class AppModel {
         for id in options.models where status[id] == .queued { status[id] = nil }
         refreshStatus()
         checkConfiguratorAccess()
+
+        if notify {
+            Notifier.shared.announceReady(runDownloads, name: displayName)
+            if !userCancelled { Notifier.shared.announceFailures(runFailures) }
+        }
     }
 
     private func handle(_ event: SyncEvent) {
@@ -659,8 +693,10 @@ final class AppModel {
             progress?.received[fw.fileName] = fw.size
             progress?.finished.insert(fw.fileName)
             set(fw, .ready(fw.version))
+            runDownloads.append((fw, modelsByFile[fw.fileName] ?? [fw.identifier]))
         case let .failed(fw, message):
             append("Failed \(fw.fileName): \(message)")
+            runFailures += 1
             progress?.finished.insert(fw.fileName)
             set(fw, .failed(message))
         case let .removed(url):
