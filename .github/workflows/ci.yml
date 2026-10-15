@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Engine and CLI
+        run: |
+          swift build
+          swift test
+
+      - name: App (unsigned)
+        run: |
+          brew install xcodegen
+          cd App
+          xcodegen
+          xcodebuild -project IPSWMirror.xcodeproj -scheme IPSWMirror -configuration Release \
+            CODE_SIGNING_ALLOWED=NO build

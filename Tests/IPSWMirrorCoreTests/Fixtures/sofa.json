@@ -1,0 +1,35 @@
+{
+  "UpdateHash": "fixture",
+  "OSVersions": [
+    {
+      "OSVersion": "26",
+      "Latest": {
+        "ProductVersion": "26.7.1",
+        "Build": "23H6030",
+        "SupportedDevices": ["iPhone16,1", "iPad11,1", "iPhone12,1"]
+      }
+    },
+    {
+      "OSVersion": "27",
+      "Latest": {
+        "ProductVersion": "27.0.1",
+        "Build": "24A9446",
+        "SupportedDevices": ["iPhone16,1", "iPad14,3", "iPhone12,1"]
+      }
+    },
+    {
+      "OSVersion": "18",
+      "Latest": {
+        "ProductVersion": "18.7.9",
+        "Build": "22H6355",
+        "SupportedDevices": ["iPhone11,2"]
+      }
+    },
+    {
+      "OSVersion": "17",
+      "Latest": {
+        "ProductVersion": "17.7.10"
+      }
+    }
+  ]
+}

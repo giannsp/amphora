@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>consulting.techne.ipsw-mirror</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/usr/bin/caffeinate</string>
+		<string>-i</string>
+		<string>/usr/local/bin/ipsw-mirror.zsh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>DEST_DIR</key>
+		<string>/Users/Shared/IPSW</string>
+		<key>MODELS</key>
+		<string></string>
+		<key>MIN_FREE_GB</key>
+		<string>25</string>
+	</dict>
+	<key>StartInterval</key>
+	<integer>14400</integer>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>LowPriorityIO</key>
+	<true/>
+	<key>StandardOutPath</key>
+	<string>/Library/Logs/ipsw-mirror.out.log</string>
+	<key>StandardErrorPath</key>
+	<string>/Library/Logs/ipsw-mirror.err.log</string>
+</dict>
+</plist>

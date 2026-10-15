@@ -1,0 +1,29 @@
+{
+  "name": "iPhone 15 Pro",
+  "identifier": "iPhone16,1",
+  "firmwares": [
+    {
+      "identifier": "iPhone16,1",
+      "version": "27.0.1",
+      "buildid": "24A446",
+      "sha1sum": "6228e2dc88bad187a5a37900eac035b975385e35",
+      "md5sum": "051dc0ad742436145fef27d92524294f",
+      "sha256sum": "7399C8D21F8526113E411434612457FBA94E0D64A933F927605F7A043F6AF9BB",
+      "filesize": 12225373164,
+      "url": "https://updates.cdn-apple.com/2026FallFCS/2397fb0d-078f-4671-a0ad-d589b3cf1288/iPhone16,1_27.0.1_24A446_Restore.ipsw",
+      "releasedate": "2026-09-28T18:54:01Z",
+      "signed": true
+    },
+    {
+      "identifier": "iPhone16,1",
+      "version": "27.0",
+      "buildid": "24A437",
+      "sha1sum": "55ceb0952b39796f3e549920575fa84754f12807",
+      "sha256sum": "8b1656256bf340fa28f6b4a95b2fd87de14cb08c9ab4ec37bda8d7759d92f7d2",
+      "filesize": 12225465074,
+      "url": "https://updates.cdn-apple.com/2026FallFCS/2e8e8760-77ba-437f-9de2-4cb1228a5d40/iPhone16,1_27.0_24A437_Restore.ipsw",
+      "releasedate": "2026-09-14T17:18:35Z",
+      "signed": false
+    }
+  ]
+}

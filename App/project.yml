@@ -1,0 +1,34 @@
+# Generates IPSWMirror.xcodeproj — run `xcodegen` in this folder (brew install xcodegen).
+# The generated project is not committed; this file is the source of truth.
+name: IPSWMirror
+options:
+  bundleIdPrefix: consulting.techne
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+packages:
+  IPSWMirrorCore:
+    path: ..
+targets:
+  IPSWMirror:
+    type: application
+    scheme: {}
+    platform: macOS
+    sources:
+      - path: Sources
+    dependencies:
+      - package: IPSWMirrorCore
+        product: IPSWMirrorCore
+    settings:
+      base:
+        PRODUCT_NAME: IPSW Mirror
+        PRODUCT_BUNDLE_IDENTIFIER: consulting.techne.ipswmirror
+        MARKETING_VERSION: 0.1.0
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_NSHumanReadableCopyright: "MIT License"
+        ENABLE_HARDENED_RUNTIME: YES
+        ENABLE_APP_SANDBOX: NO
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
