@@ -18,8 +18,8 @@ struct FilesView: View {
             .toolbar {
                 ToolbarItem {
                     Button("Delete", systemImage: "trash") { model.requestDelete(selection) }
-                        .disabled(selection.isEmpty || model.isBusy)
-                        .help(model.isBusy ? "Wait for the current sync to finish" : "Delete the selected IPSW files")
+                        .disabled(selection.isEmpty)
+                        .help("Delete the selected IPSW files")
                 }
             }
     }
@@ -38,10 +38,21 @@ struct FilesView: View {
                         .help(file.name)
                 }
                 TableColumn("Version") { file in
-                    Text(file.version ?? "—")
-                        .monospacedDigit()
+                    HStack(spacing: 6) {
+                        Text(file.version ?? "—")
+                            .monospacedDigit()
+                        if file.isPartial {
+                            Text("Partial")
+                                .font(.caption)
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 1)
+                                .background(Color.orange.opacity(0.12), in: .capsule)
+                                .help("Download not finished. It resumes at the next sync, or delete it to free the space.")
+                        }
+                    }
                 }
-                .width(min: 60, ideal: 70, max: 90)
+                .width(min: 70, ideal: 120, max: 150)
                 TableColumn("Used by") { file in
                     Text(usedBy(file))
                         .foregroundStyle(file.models.isEmpty ? .secondary : .primary)
@@ -56,7 +67,10 @@ struct FilesView: View {
             } rows: {
                 ForEach(files) { file in
                     TableRow(file)
-                        .itemProvider { NSItemProvider(object: model.store.root.appendingPathComponent(file.name) as NSURL) }
+                        .itemProvider {
+                            // A partial file can't restore anything, so it can't be dragged out.
+                            file.isPartial ? nil : NSItemProvider(object: model.store.root.appendingPathComponent(file.name) as NSURL)
+                        }
                 }
             }
             .contextMenu(forSelectionType: String.self) { names in
@@ -64,7 +78,7 @@ struct FilesView: View {
                     .disabled(names.isEmpty)
                 Divider()
                 Button("Delete…", role: .destructive) { model.requestDelete(names) }
-                    .disabled(names.isEmpty || model.isBusy)
+                    .disabled(names.isEmpty)
             } primaryAction: { names in
                 reveal(names)
             }
@@ -87,7 +101,10 @@ struct FilesView: View {
     }
 
     private func reveal(_ names: Set<String>) {
-        let urls = names.sorted().map { model.store.root.appendingPathComponent($0) }
+        let urls = names.sorted().map { name -> URL in
+            let partial = model.storedFiles.first { $0.name == name }?.isPartial == true
+            return model.store.root.appendingPathComponent(partial ? name + ".part" : name)
+        }
         NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 }

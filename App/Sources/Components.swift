@@ -28,6 +28,7 @@ struct DeviceGlyph: View {
 struct KeepButton: View {
     let isOn: Bool
     let isLocked: Bool
+    var lockReason: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -43,7 +44,7 @@ struct KeepButton: View {
         .disabled(isLocked)
         .accessibilityLabel("Keep current")
         .accessibilityValue(isOn ? "On" : "Off")
-        .help(isLocked ? "Set by your organization"
+        .help(isLocked ? (lockReason ?? "Set by your organization")
               : isOn ? "Stop keeping this model current" : "Keep this model current")
     }
 }
@@ -63,19 +64,22 @@ struct StatusBadge: View {
     private var content: some View {
         switch status {
         case let .ready(version):
-            pill(version, symbol: "checkmark.circle.fill", tint: .green)
+            pill("Ready · \(version)", symbol: "checkmark.circle.fill", tint: .green)
+                .help("The \(version) restore file is downloaded and verified")
         case let .outdated(version):
-            pill("\(version) → \(target)", symbol: "arrow.up.circle.fill", tint: .orange)
+            pill("Update available: \(version) → \(target)", symbol: "arrow.up.circle.fill", tint: .orange)
+                .help("The file on disk is \(version). The next sync downloads \(target).")
         case .missing:
             if isKept {
-                pill("\(target) needed", symbol: "arrow.down.circle", tint: .orange)
+                pill("Not downloaded · \(target)", symbol: "arrow.down.circle", tint: .secondary)
+                    .help("The \(target) restore file isn't on this Mac yet")
             } else {
                 Text(target)
                     .font(.callout.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
         case .queued:
-            pill("Queued", symbol: "clock", tint: .secondary)
+            pill("Waiting", symbol: "clock", tint: .secondary)
         case let .downloading(fraction):
             HStack(spacing: 8) {
                 ProgressView(value: fraction)
@@ -152,7 +156,8 @@ struct DeviceRow: View {
     let row: AppModel.Row
     @State private var hovering = false
 
-    private var isKept: Bool { model.selected.contains(row.id) }
+    private var isKept: Bool { model.isKept(row.id) }
+    private var jamfCount: Int? { model.modelSource == .jamf ? model.jamfCounts[row.id] : nil }
     private var fileURL: URL? { model.fileURL(for: row.id) }
     private var status: AppModel.Status { model.status[row.id] ?? .missing }
     private var canDownload: Bool {
@@ -164,16 +169,30 @@ struct DeviceRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            KeepButton(isOn: isKept, isLocked: model.selectionManaged) {
-                withAnimation(.ui) { model.toggleKept(row.id) }
+            // In Jamf mode the inventory decides, so there is nothing to tick.
+            if model.modelSource == .curated {
+                KeepButton(isOn: isKept, isLocked: model.selectionLocked, lockReason: model.selectionLockReason) {
+                    withAnimation(.ui) { model.toggleKept(row.id) }
+                }
             }
             DeviceGlyph(family: row.device.family)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.device.name)
                     .fontWeight(.medium)
-                Text(row.device.identifier)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text(row.device.identifier)
+                        .font(.caption.monospaced())
+                    if let jamfCount {
+                        Text("· \(plural(jamfCount, "device")) in Jamf")
+                            .font(.caption)
+                    }
+                    if row.isLegacy {
+                        Text("· final release for this model")
+                            .font(.caption)
+                            .help("Current releases no longer support this model. Apple still signs its last release, so it can be restored.")
+                    }
+                }
+                .foregroundStyle(.secondary)
             }
             Spacer(minLength: 12)
             StatusBadge(status: status, target: row.targetVersion, isKept: isKept)
@@ -206,10 +225,12 @@ struct DeviceRow: View {
         .fileDrag(fileURL)
         .help(fileURL == nil ? "" : "Drag onto a device in Apple Configurator to restore with this IPSW")
         .contextMenu {
-            Button(isKept ? "Stop Keeping Current" : "Keep Current") {
-                withAnimation(.ui) { model.toggleKept(row.id) }
+            if model.modelSource == .curated {
+                Button(isKept ? "Remove from My Devices" : "Add to My Devices") {
+                    withAnimation(.ui) { model.toggleKept(row.id) }
+                }
+                .disabled(model.selectionLocked)
             }
-            .disabled(model.selectionManaged)
             Button("Download Now") {
                 Task { await model.downloadNow(row.id) }
             }
@@ -218,10 +239,12 @@ struct DeviceRow: View {
                 Button("Show IPSW in Finder") {
                     NSWorkspace.shared.activateFileViewerSelecting([url])
                 }
-                Button("Delete Downloaded IPSW…", role: .destructive) {
+            }
+            if model.fileName(for: row.id) != nil {
+                Button(model.hasPartialFile(for: row.id) ? "Delete Partial Download…" : "Delete Downloaded IPSW…",
+                       role: .destructive) {
                     model.requestDelete(model: row.id)
                 }
-                .disabled(model.isBusy)
             }
             Divider()
             Button("Copy Identifier") {
@@ -229,6 +252,104 @@ struct DeviceRow: View {
                 NSPasteboard.general.setString(row.id, forType: .string)
             }
         }
+    }
+}
+
+/// One toolbar control for a running sync: a ring that fills with overall progress around a stop square,
+/// like Safari's downloads. Spins while the plan is being worked out; click to cancel.
+struct SyncProgressButton: View {
+    @Environment(AppModel.self) private var model
+    @State private var hovering = false
+    @State private var showDetail = false
+
+    private var fraction: Double? {
+        guard let progress = model.progress, progress.fileCount > 0 else { return nil }
+        return progress.fraction
+    }
+
+    var body: some View {
+        Button {
+            model.cancel()
+        } label: {
+            ZStack {
+                Circle()
+                    .stroke(Color.secondary.opacity(0.25), lineWidth: 2.5)
+                if let fraction {
+                    Circle()
+                        .trim(from: 0, to: max(0.02, fraction))
+                        .stroke(Color.accentColor, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .animation(.ui, value: fraction)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                        .scaleEffect(1.15)
+                }
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(Color.primary.opacity(0.8))
+                    .frame(width: 6, height: 6)
+            }
+            .frame(width: 18, height: 18)
+        }
+        // No tooltip: the hover popover below carries the live details (a changing tooltip flickers).
+        .accessibilityLabel("Stop sync")
+        .accessibilityValue(fraction.map { "\(Int($0 * 100)) percent" } ?? "Checking")
+        .onHover { inside in
+            hovering = inside
+            if inside {
+                Task {
+                    try? await Task.sleep(for: .milliseconds(350))
+                    if hovering { showDetail = true }
+                }
+            } else {
+                showDetail = false
+            }
+        }
+        .popover(isPresented: $showDetail, arrowEdge: .bottom) {
+            SyncDetailPopover()
+                .environment(model)
+        }
+    }
+}
+
+/// Live sync details. Updates in place, unlike a tooltip.
+private struct SyncDetailPopover: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let progress = model.progress, progress.fileCount > 0 {
+                Text("Downloading \(min(progress.finished.count + 1, progress.fileCount)) of \(progress.fileCount)")
+                    .fontWeight(.semibold)
+                if let current = progress.current {
+                    Text(current)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                ProgressView(value: progress.fraction)
+                HStack {
+                    Text("\(ByteCountFormatter.string(fromByteCount: progress.receivedBytes, countStyle: .file)) of "
+                         + ByteCountFormatter.string(fromByteCount: progress.totalBytes, countStyle: .file))
+                    Spacer()
+                    Text(progress.fraction, format: .percent.precision(.fractionLength(0)))
+                }
+                .font(.callout)
+                .monospacedDigit()
+                .foregroundStyle(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Checking for new releases…")
+                }
+            }
+            Text("Click to stop. Downloads resume next time.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(14)
+        .frame(width: 280)
     }
 }
 

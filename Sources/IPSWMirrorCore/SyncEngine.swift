@@ -66,17 +66,20 @@ public actor SyncEngine {
         var problems = 0
 
         for model in Set(models).sorted() {
-            guard let version = targets[model] else {
-                await onEvent(.warning("\(model): not supported by any current iOS/iPadOS release in SOFA"))
-                problems += 1
-                continue
-            }
             do {
-                if let firmware = try await source.signedFirmware(for: model, version: version) {
+                if let version = targets[model] {
+                    if let firmware = try await source.signedFirmware(for: model, version: version) {
+                        byFile[firmware.fileName, default: (firmware: firmware, models: [])].models.append(model)
+                    } else {
+                        await onEvent(.warning("\(model): no signed IPSW for \(version) published yet"))
+                        problems += 1
+                    }
+                } else if let firmware = try await source.latestSignedFirmware(for: model) {
+                    // Dropped by current releases: keep the final version Apple still signs.
                     byFile[firmware.fileName, default: (firmware: firmware, models: [])].models.append(model)
                 } else {
-                    await onEvent(.warning("\(model): no signed IPSW for \(version) published yet"))
-                    problems += 1
+                    // Nothing to keep, and not an error: cleanup still runs.
+                    await onEvent(.warning("\(model): Apple no longer signs any release for this model, skipped"))
                 }
             } catch {
                 await onEvent(.warning("\(model): lookup failed — \(error.localizedDescription)"))

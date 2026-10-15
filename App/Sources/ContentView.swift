@@ -19,25 +19,21 @@ struct ContentView: View {
             List(selection: $pane) {
                 Label("Overview", systemImage: "square.grid.2x2")
                     .tag(Pane.overview)
+                Label("My Devices", systemImage: model.modelSource == .jamf ? "server.rack" : "checkmark.circle")
+                    .badge(model.attentionRows.count)
+                    .help("Models that still need their restore file")
+                    .tag(Pane.kept)
+                Label("Downloaded", systemImage: "internaldrive")
+                    .tag(Pane.files)
+                Label("Activity", systemImage: "list.bullet.rectangle")
+                    .badge(model.unseenWarnings)
+                    .tag(Pane.activity)
 
-                Section("Devices") {
+                Section("All Models") {
                     Label("iPhone", systemImage: "iphone")
-                        .badge(model.keptCount(.iPhone))
                         .tag(Pane.devices(.iPhone))
                     Label("iPad", systemImage: "ipad")
-                        .badge(model.keptCount(.iPad))
                         .tag(Pane.devices(.iPad))
-                }
-
-                Section("Library") {
-                    Label("Kept Current", systemImage: "checkmark.circle")
-                        .badge(model.attentionRows.count)
-                        .tag(Pane.kept)
-                    Label("Downloaded", systemImage: "internaldrive")
-                        .tag(Pane.files)
-                    Label("Activity", systemImage: "list.bullet.rectangle")
-                        .badge(model.unseenWarnings)
-                        .tag(Pane.activity)
                 }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
@@ -64,10 +60,10 @@ struct ContentView: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { model.confirmDelete(stopKeeping: false) }
-            if !model.pendingKeptModels.isEmpty {
+            Button("Delete", role: .destructive) { Task { await model.confirmDelete(stopKeeping: false) } }
+            if !model.pendingKeptModels.isEmpty && model.modelSource == .curated {
                 Button("Delete and Stop Keeping Current", role: .destructive) {
-                    model.confirmDelete(stopKeeping: true)
+                    Task { await model.confirmDelete(stopKeeping: true) }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -75,23 +71,14 @@ struct ContentView: View {
             Text(model.deletionMessage)
         }
         .toolbar {
-            ToolbarItemGroup(placement: .primaryAction) {
+            ToolbarItem(placement: .primaryAction) {
                 if model.isBusy {
-                    if let progress = model.progress, progress.fileCount > 0 {
-                        ProgressView(value: progress.fraction)
-                            .frame(width: 110)
-                            .help("\(Int(progress.fraction * 100))% of \(plural(progress.fileCount, "file"))")
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Button("Cancel", systemImage: "stop.circle") { model.cancel() }
-                        .help("Stop now. Downloads resume where they left off next time.")
+                    SyncProgressButton()
                 } else {
                     Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") {
                         Task { await model.syncSelected() }
                     }
-                    .disabled(model.selected.isEmpty)
+                    .disabled(model.keptIDs.isEmpty && model.modelSource == .curated)
                     .help("Download what kept models need, then clean up (⌘R)")
                 }
             }

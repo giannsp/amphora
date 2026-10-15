@@ -4,7 +4,7 @@ Keeps the latest signed iOS and iPadOS restore files (IPSWs) on your service des
 
 Free and open source (MIT). Built by an Apple admin, for Apple admins.
 
-> **Status: v0.1, early.** Curated and on-demand modes work. Jamf Pro integration arrives in v0.2. See the [roadmap](#roadmap).
+> **Status: early.** Curated, on-demand and Jamf Pro modes work. See the [roadmap](#roadmap).
 
 ## What it does
 
@@ -36,6 +36,8 @@ swift build -c release
 
 ```text
 ipsw-mirror sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
+ipsw-mirror sync   --from-jamf          [--include-unmanaged] [same options as above]
+ipsw-mirror jamf   [--include-unmanaged]
 ipsw-mirror get    <model-identifier>   [--store <dir>] [--configurator]
 ipsw-mirror plan   --models <id,id,...> [--store <dir>]
 ipsw-mirror models [--filter <text>]
@@ -53,13 +55,35 @@ The default folder is `/Users/Shared/IPSW Mirror`.
 
 Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example `iPhone16,1`).
 
+## Jamf Pro
+
+Instead of ticking models by hand, let Jamf Pro decide: IPSW Mirror keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have.
+
+1. In Jamf Pro → Settings → **API Roles and Clients**, create a role with only **Read Mobile Devices**.
+2. Create an API client with that role, enable it, and generate a client secret.
+3. In IPSW Mirror → Settings → Models, choose **Jamf Pro inventory**, enter the address, client ID and secret, and click **Test Connection**.
+
+What it does and doesn't do:
+
+- Reads model identifiers only (and whether each device is managed). No serial numbers, users or locations are stored.
+- Never writes anything to Jamf Pro.
+- The secret lives in your login Keychain, never in preferences or logs.
+- If Jamf Pro can't be reached, or returns no devices, IPSW Mirror keeps using the last good inventory and deletes nothing because of it.
+- Models no signed iOS/iPadOS release supports any more are listed in Settings and skipped.
+
+From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `ipsw-mirror sync --from-jamf`.
+
 ## Managed settings
 
 Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM configuration profile can set them. Values set by a profile show as locked in the app.
 
 | Key | Type | Meaning |
 | --- | --- | --- |
-| `SelectedModels` | array of strings | Model identifiers to keep current |
+| `ModelSource` | string | `curated` (models ticked in the app) or `jamf` (Jamf Pro inventory) |
+| `SelectedModels` | array of strings | Model identifiers to keep current in `curated` mode |
+| `JamfURL` | string | Jamf Pro address, e.g. `https://yourorg.jamfcloud.com` |
+| `JamfClientID` | string | API client ID. The secret is entered once in the app and kept in the Keychain |
+| `JamfManagedDevicesOnly` | boolean | Count only managed devices (default `true`) |
 | `StorePath` | string | Folder for IPSWs |
 | `PruneOldIPSWs` | boolean | Delete IPSWs no longer needed (default `true`) |
 | `ExportToConfigurator` | boolean | Place IPSWs in Apple Configurator's cache (default `true`) |
@@ -104,7 +128,7 @@ No telemetry and no accounts. Requests carry a `User-Agent` of `IPSWMirror/<vers
 ## Roadmap
 
 - **v0.1 — Usable without Jamf.** Curated and on-demand modes, app and CLI, verify and prune, drag to restore, manual delete.
-- **v0.2 — Jamf-driven.** Model list from Jamf Pro inventory through a read-only API client, Keychain storage, signed and notarized `.pkg`.
+- **v0.2 — Jamf-driven.** Model list from Jamf Pro inventory through a read-only API client, Keychain storage *(done)*; signed and notarized `.pkg`.
 - **v0.3 — Runs on its own.** Menu bar agent with background sync, notifications, Universal Mac IPSWs for Apple Silicon.
 
 ## Building from source

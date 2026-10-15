@@ -15,11 +15,14 @@ struct OverviewView: View {
 
                 ConfiguratorAccessBanner()
 
+                JamfBanner()
+
                 HeroCard(browse: browse)
 
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 180), spacing: 12)], spacing: 12) {
-                    StatTile(title: "Kept current", value: "\(model.keptRows.count)",
-                             detail: "\(model.readyCount) ready to restore", symbol: "checkmark.circle")
+                    StatTile(title: "Ready to restore", value: "\(model.readyCount) of \(model.keptRows.count)",
+                             detail: model.modelSource == .jamf ? "models from Jamf Pro" : "models you chose",
+                             symbol: model.modelSource == .jamf ? "server.rack" : "checkmark.circle")
                     StatTile(title: "On disk",
                              value: ByteCountFormatter.string(fromByteCount: model.diskUsage, countStyle: .file),
                              detail: plural(model.fileCount, "IPSW file"), symbol: "internaldrive")
@@ -62,7 +65,7 @@ struct OverviewView: View {
     }
 
     private var nextSyncDetail: String {
-        guard let next = model.nextSync, !model.selected.isEmpty else { return "Every 6 hours while open" }
+        guard let next = model.nextSync, !model.keptIDs.isEmpty else { return "Every 6 hours while open" }
         return next < Date() ? "Next: due now" : "Next: \(next.formatted(date: .omitted, time: .shortened))"
     }
 }
@@ -87,9 +90,16 @@ private struct HeroCard: View {
                          title: files == 0 ? "Checking for new releases…" : "Downloading \(min(done + 1, files)) of \(files)",
                          subtitle: model.progress?.current ?? "Comparing your models with the latest signed releases")
         }
+        if kept == 0 && model.modelSource == .jamf {
+            return HeroState(symbol: "server.rack", tint: .secondary,
+                             title: model.jamfConfigured ? "No supported models in Jamf Pro yet" : "Connect to Jamf Pro",
+                             subtitle: model.jamfConfigured
+                                 ? "IPSW Mirror keeps every iPhone and iPad model in your inventory current."
+                                 : "Add your Jamf Pro address and a read-only API client in Settings.")
+        }
         if kept == 0 {
             return HeroState(symbol: "circle.dashed", tint: .secondary,
-                         title: "Choose the models you keep current",
+                         title: "Choose the models you support",
                          subtitle: "IPSW Mirror keeps their restore files downloaded, verified and up to date.")
         }
         if model.failedCount > 0 {
@@ -146,6 +156,10 @@ private struct HeroCard: View {
             if model.isBusy {
                 Button("Cancel") { model.cancel() }
                     .controlSize(.large)
+            } else if model.keptRows.isEmpty && model.modelSource == .jamf {
+                SettingsLink { Text("Open Settings") }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
             } else if model.keptRows.isEmpty {
                 Button("Browse iPhone Models") { browse(.iPhone) }
                     .buttonStyle(.borderedProminent)
@@ -179,5 +193,33 @@ private struct ErrorBanner: View {
         }
         .padding(12)
         .background(Color.red.opacity(0.08), in: .rect(cornerRadius: 12))
+    }
+}
+
+/// Jamf trouble, in plain words. Syncs keep using the last good inventory meanwhile.
+private struct JamfBanner: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        if model.modelSource == .jamf, model.jamfConfigured, let error = model.jamfError {
+            HStack(spacing: 12) {
+                Image(systemName: "server.rack")
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(error)
+                    if let fetched = model.jamfFetched {
+                        Text("Using the inventory from \(fetched.formatted(.relative(presentation: .named))). Nothing is deleted because of this.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button("Try Again") { Task { await model.refreshJamf() } }
+                    .disabled(model.isFetchingJamf)
+                SettingsLink { Text("Settings") }
+            }
+            .padding(12)
+            .background(Color.orange.opacity(0.10), in: .rect(cornerRadius: 12))
+        }
     }
 }

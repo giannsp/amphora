@@ -15,7 +15,7 @@ struct IPSWMirrorApp: App {
             CommandGroup(after: .newItem) {
                 Button("Sync Now") { Task { await model.syncSelected() } }
                     .keyboardShortcut("r")
-                    .disabled(model.isBusy || model.selected.isEmpty)
+                    .disabled(model.isBusy || (model.keptIDs.isEmpty && model.modelSource == .curated))
             }
         }
 

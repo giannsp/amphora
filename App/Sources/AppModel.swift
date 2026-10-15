@@ -10,6 +10,8 @@ final class AppModel {
     struct Row: Identifiable, Hashable {
         let device: DeviceModel
         let targetVersion: String
+        /// Dropped by current releases; kept on the final version Apple still signs.
+        var isLegacy = false
         var id: String { device.identifier }
         /// OS major the model targets, e.g. 27. Older models stay on an older major.
         var major: Int { Int(targetVersion.split(separator: ".").first ?? "") ?? 0 }
@@ -50,14 +52,34 @@ final class AppModel {
 
     /// One IPSW in the store, with the models it serves (empty when the manifest doesn't know it).
     struct StoredFile: Identifiable, Hashable {
+        /// Always the finished file name ("…_Restore.ipsw"), also for a partial download.
         let name: String
         let size: Int64
         let version: String?
         let models: [String]
+        /// A download that hasn't finished: only the .ipsw.part file exists.
+        let isPartial: Bool
         var id: String { name }
     }
 
+    /// Apple names restore files "<model>[,<model>…]_<version>_<build>_Restore.ipsw",
+    /// e.g. "iPad14,3,iPad14,4_27.0.1_24A446_Restore.ipsw".
+    static func parse(fileName: String) -> (models: [String], version: String?) {
+        let parts = fileName.split(separator: "_")
+        guard let head = parts.first else { return ([], nil) }
+        let regex = #/(iPhone|iPad)\d+,\d+/#
+        let models = head.matches(of: regex).map { String($0.output.0) }
+        return (models, parts.dropFirst().first.map(String.init))
+    }
+
     static let syncInterval: TimeInterval = 6 * 60 * 60
+
+    /// Where the list of models to keep current comes from.
+    enum ModelSource: String, CaseIterable, Identifiable {
+        case curated, jamf
+        var id: String { rawValue }
+        var title: String { self == .curated ? "Models I choose" : "Jamf Pro inventory" }
+    }
 
     private enum Key {
         static let selected = "SelectedModels"
@@ -66,11 +88,34 @@ final class AppModel {
         static let configurator = "ExportToConfigurator"
         static let setupDismissed = "ConfiguratorSetupDismissed"
         static let lastSync = "LastSync"
+        static let source = "ModelSource"
+        static let jamfURL = "JamfURL"
+        static let jamfClientID = "JamfClientID"
+        static let jamfManagedOnly = "JamfManagedDevicesOnly"
+        static let jamfCounts = "JamfLastInventory"
+        static let jamfFetched = "JamfLastInventoryDate"
+        static let legacyTargets = "LegacyModelVersions"
     }
 
     private let defaults = UserDefaults.standard
 
-    var rows: [Row] = []
+    /// Models current releases support (from SOFA).
+    private var sofaRows: [Row] = []
+    /// Jamf models current releases dropped → final version Apple still signs.
+    var legacyTargets: [String: String] {
+        didSet { defaults.set(legacyTargets, forKey: Key.legacyTargets) }
+    }
+    var rows: [Row] {
+        guard modelSource == .jamf else { return sofaRows }
+        let known = Set(sofaRows.map(\.id))
+        let legacy = legacyTargets
+            .filter { !known.contains($0.key) && jamfCounts[$0.key] != nil }
+            .map { Row(device: DeviceModel(identifier: $0.key, name: deviceNames[$0.key] ?? $0.key),
+                       targetVersion: $0.value, isLegacy: true) }
+        return sofaRows + legacy
+    }
+    /// Marketing names for every iPhone/iPad identifier, including models no current release supports.
+    var deviceNames: [String: String] = [:]
     var status: [String: Status] = [:]
     var log: [String] = []
     var lastError: String?
@@ -118,6 +163,33 @@ final class AppModel {
         didSet { defaults.set(lastSync, forKey: Key.lastSync) }
     }
 
+    // Jamf Pro
+    var modelSource: ModelSource {
+        didSet { defaults.set(modelSource.rawValue, forKey: Key.source) }
+    }
+    var jamfURL: String {
+        didSet { defaults.set(jamfURL, forKey: Key.jamfURL) }
+    }
+    var jamfClientID: String {
+        didSet {
+            defaults.set(jamfClientID, forKey: Key.jamfClientID)
+            jamfSecretSaved = Keychain.secret(for: jamfClientID) != nil
+        }
+    }
+    var jamfManagedOnly: Bool {
+        didSet { defaults.set(jamfManagedOnly, forKey: Key.jamfManagedOnly) }
+    }
+    /// Last successful inventory, kept so the app still knows the fleet when Jamf is unreachable.
+    var jamfCounts: [String: Int] {
+        didSet { defaults.set(jamfCounts, forKey: Key.jamfCounts) }
+    }
+    var jamfFetched: Date? {
+        didSet { defaults.set(jamfFetched, forKey: Key.jamfFetched) }
+    }
+    var jamfError: String?
+    var jamfSecretSaved = false
+    var isFetchingJamf = false
+
     init() {
         selected = Set(defaults.stringArray(forKey: Key.selected) ?? [])
         storePath = defaults.string(forKey: Key.storePath) ?? Store.defaultRoot.path
@@ -125,6 +197,14 @@ final class AppModel {
         exportToConfigurator = defaults.object(forKey: Key.configurator) as? Bool ?? true
         configuratorSetupDismissed = defaults.bool(forKey: Key.setupDismissed)
         lastSync = defaults.object(forKey: Key.lastSync) as? Date
+        modelSource = ModelSource(rawValue: defaults.string(forKey: Key.source) ?? "") ?? .curated
+        jamfURL = defaults.string(forKey: Key.jamfURL) ?? ""
+        jamfClientID = defaults.string(forKey: Key.jamfClientID) ?? ""
+        jamfManagedOnly = defaults.object(forKey: Key.jamfManagedOnly) as? Bool ?? true
+        jamfCounts = defaults.dictionary(forKey: Key.jamfCounts) as? [String: Int] ?? [:]
+        jamfFetched = defaults.object(forKey: Key.jamfFetched) as? Date
+        legacyTargets = defaults.dictionary(forKey: Key.legacyTargets) as? [String: String] ?? [:]
+        jamfSecretSaved = !jamfClientID.isEmpty && Keychain.secret(for: jamfClientID) != nil
     }
 
     // MARK: Derived
@@ -134,6 +214,98 @@ final class AppModel {
     /// True when a configuration profile sets the value, so the UI shows it locked.
     var storePathManaged: Bool { defaults.objectIsForced(forKey: Key.storePath) }
     var selectionManaged: Bool { defaults.objectIsForced(forKey: Key.selected) }
+    var sourceManaged: Bool { defaults.objectIsForced(forKey: Key.source) }
+    var jamfURLManaged: Bool { defaults.objectIsForced(forKey: Key.jamfURL) }
+    var jamfClientIDManaged: Bool { defaults.objectIsForced(forKey: Key.jamfClientID) }
+
+    /// Models kept current: ticked by hand, or every model in Jamf that a current iOS/iPadOS supports.
+    var keptIDs: Set<String> {
+        switch modelSource {
+        case .curated: return selected
+        case .jamf: return Set(jamfCounts.keys).intersection(rows.map(\.id))
+        }
+    }
+
+    func isKept(_ id: String) -> Bool { keptIDs.contains(id) }
+
+    /// Ticking is off when a profile sets the list or Jamf supplies it.
+    var selectionLocked: Bool { selectionManaged || modelSource == .jamf }
+    var selectionLockReason: String? {
+        if modelSource == .jamf { return "Kept current because it's in your Jamf Pro inventory" }
+        if selectionManaged { return "Set by your organization" }
+        return nil
+    }
+
+    /// Models in Jamf that no current iOS/iPadOS supports (old devices): nothing to download for them.
+    var jamfUnsupported: [String] {
+        guard !rows.isEmpty else { return [] }
+        let known = Set(rows.map(\.id))
+        return jamfCounts.keys.filter { !known.contains($0) }.sorted()
+    }
+
+    var jamfConfigured: Bool { !jamfURL.isEmpty && !jamfClientID.isEmpty && jamfSecretSaved }
+
+    func saveJamfSecret(_ secret: String) {
+        let trimmed = secret.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !jamfClientID.isEmpty else { return }
+        do {
+            try Keychain.setSecret(trimmed, for: jamfClientID)
+            jamfSecretSaved = true
+        } catch {
+            jamfError = "Couldn't save the secret in the Keychain. \(error.localizedDescription)"
+        }
+    }
+
+    /// For Jamf models current releases dropped, finds the final version Apple still signs.
+    /// A model with nothing signed stays out of the list (shown as "No signed release").
+    func resolveLegacyModels() async {
+        guard !sofaRows.isEmpty else { return }
+        let known = Set(sofaRows.map(\.id))
+        var resolved: [String: String] = [:]
+        for id in jamfCounts.keys.sorted() where !known.contains(id) {
+            do {
+                if let firmware = try await IPSWMeSource().latestSignedFirmware(for: id) {
+                    resolved[id] = firmware.version
+                }
+            } catch {
+                // Lookup failed (offline?): keep what we knew rather than call the model unsupported.
+                if let known = legacyTargets[id] { resolved[id] = known }
+            }
+        }
+        legacyTargets = resolved
+        refreshStatus()
+    }
+
+    /// Fetches the inventory. On failure the last good inventory stays in use and nothing is pruned on its account.
+    @discardableResult
+    func refreshJamf() async -> Bool {
+        guard jamfConfigured, !isFetchingJamf else {
+            if !jamfConfigured { jamfError = "Add your Jamf Pro address, client ID and secret in Settings." }
+            return false
+        }
+        isFetchingJamf = true
+        defer { isFetchingJamf = false }
+        do {
+            guard let secret = Keychain.secret(for: jamfClientID) else {
+                jamfSecretSaved = false
+                throw JamfClient.JamfError.badCredentials
+            }
+            let credentials = JamfClient.Credentials(url: try JamfClient.normalizedURL(jamfURL),
+                                                     clientID: jamfClientID, clientSecret: secret)
+            let inventory = try await JamfClient(credentials: credentials).inventory(managedOnly: jamfManagedOnly)
+            jamfCounts = inventory.counts
+            jamfFetched = inventory.fetched
+            jamfError = nil
+            append("Jamf Pro: \(plural(inventory.deviceCount, "device")), \(plural(inventory.counts.count, "model"))")
+            await resolveLegacyModels()
+            return true
+        } catch {
+            jamfError = error.localizedDescription
+            unseenWarnings += 1
+            append("⚠︎ Jamf Pro: \(error.localizedDescription)")
+            return false
+        }
+    }
     var configuratorManaged: Bool { defaults.objectIsForced(forKey: Key.configurator) }
 
     /// True when the export is on but macOS (or a missing Configurator) stops it.
@@ -145,7 +317,7 @@ final class AppModel {
         configuratorAccess = exportToConfigurator ? ConfiguratorCache.checkAccess() : nil
     }
 
-    var keptRows: [Row] { rows.filter { selected.contains($0.id) } }
+    var keptRows: [Row] { rows.filter { keptIDs.contains($0.id) } }
     var readyCount: Int { keptRows.filter { status[$0.id]?.isReady == true }.count }
     var failedCount: Int { keptRows.filter { status[$0.id]?.isFailed == true }.count }
     var attentionRows: [Row] { keptRows.filter { status[$0.id]?.isReady != true } }
@@ -174,7 +346,8 @@ final class AppModel {
             let targets = try await feed.targetVersions()
             let names = Dictionary((try? await devices)?.map { ($0.identifier, $0.name) } ?? [],
                                    uniquingKeysWith: { a, _ in a })
-            rows = targets
+            if !names.isEmpty { deviceNames = names }
+            sofaRows = targets
                 .map { Row(device: DeviceModel(identifier: $0.key, name: names[$0.key] ?? $0.key), targetVersion: $0.value) }
                 .sorted { $0.device.identifier.localizedStandardCompare($1.device.identifier) == .orderedDescending }
             lastError = nil
@@ -182,23 +355,26 @@ final class AppModel {
         } catch {
             lastError = "Couldn't load current releases from SOFA. \(error.localizedDescription)"
         }
+        if modelSource == .jamf && jamfConfigured { await refreshJamf() }
     }
 
     func refreshStatus() {
         let manifest = store.readManifest()
         let entries = Dictionary(manifest.entries.map { ($0.file, $0) }, uniquingKeysWith: { a, _ in a })
-        storedFiles = store.ipswFiles()
-            .filter { $0.pathExtension == "ipsw" }
-            .map { url in
-                let name = url.lastPathComponent
-                let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-                // Apple names restore files "<model>_<version>_<build>_Restore.ipsw".
-                let parsed = name.split(separator: "_").dropFirst().first.map(String.init)
-                return StoredFile(name: name, size: Int64(size),
-                                  version: entries[name]?.version ?? parsed,
-                                  models: entries[name]?.models ?? [])
-            }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        var byName: [String: StoredFile] = [:]
+        for url in store.ipswFiles() {
+            let isPartial = url.pathExtension == "part"
+            let name = isPartial ? url.deletingPathExtension().lastPathComponent : url.lastPathComponent
+            if isPartial, byName[name] != nil { continue }   // a finished file wins over a leftover partial
+            let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            let parsed = Self.parse(fileName: name)
+            let entry = isPartial ? nil : entries[name]
+            byName[name] = StoredFile(name: name, size: Int64(size),
+                                      version: entry?.version ?? parsed.version,
+                                      models: entry?.models ?? parsed.models,
+                                      isPartial: isPartial)
+        }
+        storedFiles = byName.values.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
 
         let onDisk = manifest.versionsByModel()
         for row in rows {
@@ -217,20 +393,27 @@ final class AppModel {
     // MARK: Manual deletion
 
     func displayName(_ identifier: String) -> String {
-        rows.first { $0.id == identifier }?.device.name ?? identifier
+        rows.first { $0.id == identifier }?.device.name ?? deviceNames[identifier] ?? identifier
     }
 
+    /// Any file for the model, finished or partial: what Delete acts on.
     func fileName(for identifier: String) -> String? {
         storedFiles.first { $0.models.contains(identifier) }?.name
     }
 
-    /// The IPSW on disk for a model, for drag-to-restore and Show in Finder.
-    func fileURL(for identifier: String) -> URL? {
-        fileName(for: identifier).map { store.root.appendingPathComponent($0) }
+    func hasPartialFile(for identifier: String) -> Bool {
+        storedFiles.first { $0.models.contains(identifier) }?.isPartial == true
     }
 
+    /// The finished IPSW for a model, for drag-to-restore and Show in Finder. Never a partial.
+    func fileURL(for identifier: String) -> URL? {
+        storedFiles.first { $0.models.contains(identifier) && !$0.isPartial }
+            .map { store.root.appendingPathComponent($0.name) }
+    }
+
+    /// Allowed during a sync too: confirming stops the sync first, so a file being written is never pulled out from under it.
     func requestDelete(_ names: Set<String>) {
-        guard !names.isEmpty, !isBusy else { return }
+        guard !names.isEmpty else { return }
         pendingDeletion = names
     }
 
@@ -245,11 +428,12 @@ final class AppModel {
 
     /// Kept-current models whose file is about to go: the next sync would download it again.
     var pendingKeptModels: [String] {
-        pendingFiles.flatMap(\.models).filter { selected.contains($0) }
+        pendingFiles.flatMap(\.models).filter { keptIDs.contains($0) }
     }
 
     var deletionTitle: String {
         let files = pendingFiles
+        if files.count == 1, files[0].isPartial { return "Delete the partial download?" }
         if files.count == 1, let version = files[0].version { return "Delete the \(version) IPSW?" }
         return files.count == 1 ? "Delete \(files[0].name)?" : "Delete \(files.count) IPSW files?"
     }
@@ -261,16 +445,22 @@ final class AppModel {
         var text = models.isEmpty ? "Frees \(size)." : "Used by \(nameList(models)). Frees \(size)."
         let kept = pendingKeptModels
         if !kept.isEmpty {
-            text += " \(nameList(kept)) \(kept.count == 1 ? "is" : "are") kept current, "
+            text += " \(nameList(kept)) \(kept.count == 1 ? "is" : "are") in My Devices, "
                 + "so the next sync downloads \(files.count == 1 ? "it" : "them") again."
         }
+        if isBusy { text += " The sync in progress stops first." }
         return text
     }
 
-    func confirmDelete(stopKeeping: Bool) {
-        guard let names = pendingDeletion, !isBusy else { return }
+    func confirmDelete(stopKeeping: Bool) async {
+        guard let names = pendingDeletion else { return }
         let models = pendingFiles.flatMap(\.models)
         pendingDeletion = nil
+        if isBusy {
+            append("Stopping the sync to delete files")
+            cancel()
+            while isBusy { try? await Task.sleep(for: .milliseconds(100)) }
+        }
         for name in names.sorted() {
             do {
                 try store.delete(fileNamed: name)
@@ -298,8 +488,11 @@ final class AppModel {
     // MARK: Actions
 
     func syncSelected() async {
-        guard !selected.isEmpty else { return }
-        await run(SyncOptions(models: Array(selected), prune: prune, exportToConfigurator: exportToConfigurator))
+        guard !isBusy else { return }
+        if modelSource == .jamf { await refreshJamf() }
+        let models = keptIDs
+        guard !models.isEmpty else { return }
+        await run(SyncOptions(models: Array(models), prune: prune, exportToConfigurator: exportToConfigurator))
         lastSync = Date()
     }
 
@@ -367,6 +560,8 @@ final class AppModel {
             set(fw, .downloading(0))
         case let .progress(fw, received, total):
             guard status[fw.identifier] != .verifying, progress?.finished.contains(fw.fileName) != true else { return }
+            // Make the new partial file visible (Downloaded pane, Delete in the model's menu) as soon as it exists.
+            if !storedFiles.contains(where: { $0.name == fw.fileName }) { refreshStatus() }
             progress?.received[fw.fileName] = received
             set(fw, .downloading(total > 0 ? Double(received) / Double(total) : 0))
         case let .verifying(fw):

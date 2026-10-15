@@ -5,6 +5,9 @@ import Foundation
 public protocol FirmwareSource: Sendable {
     /// The signed restore IPSW of `version` for one model, or nil if none is signed (yet).
     func signedFirmware(for identifier: String, version: String) async throws -> Firmware?
+    /// The newest release Apple still signs for a model. For models current releases dropped:
+    /// Apple usually keeps signing their final version, so they can still be restored.
+    func latestSignedFirmware(for identifier: String) async throws -> Firmware?
     /// Human-readable names for model identifiers.
     func devices() async throws -> [DeviceModel]
 }
@@ -40,11 +43,18 @@ public struct IPSWMeSource: FirmwareSource {
     }
 
     public func signedFirmware(for identifier: String, version: String) async throws -> Firmware? {
+        Self.select(try await firmwares(for: identifier), version: version)
+    }
+
+    public func latestSignedFirmware(for identifier: String) async throws -> Firmware? {
+        Self.latestSigned(try await firmwares(for: identifier))
+    }
+
+    private func firmwares(for identifier: String) async throws -> [Entry] {
         var components = URLComponents(url: Self.base.appendingPathComponent("device/\(identifier)"),
                                        resolvingAgainstBaseURL: false)!
         components.queryItems = [URLQueryItem(name: "type", value: "ipsw")]
-        let response = try await http.getJSON(DeviceResponse.self, from: components.url!)
-        return Self.select(response.firmwares, version: version)
+        return try await http.getJSON(DeviceResponse.self, from: components.url!).firmwares
     }
 
     public func devices() async throws -> [DeviceModel] {
@@ -56,8 +66,18 @@ public struct IPSWMeSource: FirmwareSource {
 
     /// Matches on version, not build: some models ship a different build than SOFA lists.
     static func select(_ entries: [Entry], version: String) -> Firmware? {
-        guard let e = entries.first(where: { $0.version == version && $0.signed }) else { return nil }
-        return Firmware(identifier: e.identifier, version: e.version, build: e.buildid, url: e.url,
+        entries.first(where: { $0.version == version && $0.signed }).map(firmware)
+    }
+
+    static func latestSigned(_ entries: [Entry]) -> Firmware? {
+        entries
+            .filter(\.signed)
+            .max { $0.version.compare($1.version, options: .numeric) == .orderedAscending }
+            .map(firmware)
+    }
+
+    static func firmware(_ e: Entry) -> Firmware {
+        Firmware(identifier: e.identifier, version: e.version, build: e.buildid, url: e.url,
                         sha256: e.sha256sum.flatMap { $0.isEmpty ? nil : $0.lowercased() },
                         sha1: e.sha1sum.flatMap { $0.isEmpty ? nil : $0.lowercased() },
                         size: e.filesize)

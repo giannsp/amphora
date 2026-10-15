@@ -4,11 +4,66 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(AppModel.self) private var model
+    @State private var secret = ""
+    @State private var testResult: String?
 
     var body: some View {
         @Bindable var model = model
 
         Form {
+            Section {
+                Picker("Keep current", selection: $model.modelSource) {
+                    ForEach(AppModel.ModelSource.allCases) { source in
+                        Text(source.title).tag(source)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .disabled(model.sourceManaged)
+
+                if model.modelSource == .jamf {
+                    TextField("Jamf Pro address", text: $model.jamfURL, prompt: Text("https://yourorg.jamfcloud.com"))
+                        .disabled(model.jamfURLManaged)
+                    TextField("API client ID", text: $model.jamfClientID)
+                        .disabled(model.jamfClientIDManaged)
+                    LabeledContent("Client secret") {
+                        HStack {
+                            SecureField("Client secret", text: $secret,
+                                        prompt: Text(model.jamfSecretSaved ? "Saved in the Keychain" : "Paste the secret"))
+                                .labelsHidden()
+                                .onSubmit(saveSecret)
+                            Button("Save", action: saveSecret)
+                                .disabled(secret.isEmpty || model.jamfClientID.isEmpty)
+                        }
+                    }
+                    Toggle("Only managed devices", isOn: $model.jamfManagedOnly)
+                    LabeledContent("Inventory") {
+                        HStack {
+                            jamfStatus
+                            Button(model.isFetchingJamf ? "Checking…" : "Test Connection") {
+                                Task {
+                                    saveSecret()
+                                    let ok = await model.refreshJamf()
+                                    testResult = ok ? nil : model.jamfError
+                                }
+                            }
+                            .disabled(!model.jamfConfigured || model.isFetchingJamf)
+                        }
+                    }
+                    if !model.jamfUnsupported.isEmpty {
+                        Text("No signed release: \(model.jamfUnsupported.map { "\(model.displayName($0)) (\($0))" }.joined(separator: ", ")). They're listed in My Devices, with nothing to download.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Models")
+            } footer: {
+                if model.modelSource == .jamf {
+                    Text("Create an API Role with only \"Read Mobile Devices\" and an API Client using it (Jamf Pro → Settings → API Roles and Clients). IPSW Mirror reads model identifiers only, and never changes anything in Jamf Pro. The secret is stored in your Keychain.")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             Section {
                 LabeledContent("Folder") {
                     HStack {
@@ -70,8 +125,38 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { model.checkConfiguratorAccess() }
-        .frame(width: 560)
+        .frame(width: 600)
         .fixedSize(horizontal: false, vertical: true)
+        .onChange(of: model.modelSource) { _, source in
+            if source == .jamf && model.jamfConfigured { Task { await model.refreshJamf() } }
+        }
+    }
+
+    @ViewBuilder
+    private var jamfStatus: some View {
+        if let error = testResult ?? model.jamfError {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+                .lineLimit(2)
+        } else if let fetched = model.jamfFetched, !model.jamfCounts.isEmpty {
+            let devices = model.jamfCounts.values.reduce(0, +)
+            let supported = model.jamfCounts.count - model.jamfUnsupported.count
+            let models = model.jamfUnsupported.isEmpty
+                ? plural(model.jamfCounts.count, "model")
+                : "\(plural(model.jamfCounts.count, "model")), \(supported) with a signed release"
+            Label("\(plural(devices, "device")) · \(models) · \(fetched.formatted(.relative(presentation: .named)))",
+                  systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        } else {
+            Text("Not checked yet")
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func saveSecret() {
+        guard !secret.isEmpty else { return }
+        model.saveJamfSecret(secret)
+        secret = ""
     }
 
     private func chooseFolder() {

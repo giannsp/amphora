@@ -27,9 +27,50 @@ final class IPSWMeTests: XCTestCase {
                        "checksums are normalised to lowercase")
     }
 
+    func testLatestSignedPicksNewestSignedRelease() throws {
+        let response = try JSONDecoder().decode(IPSWMeSource.DeviceResponse.self, from: fixture("ipswme-device"))
+        XCTAssertEqual(IPSWMeSource.latestSigned(response.firmwares)?.version, "27.0.1")
+        XCTAssertNil(IPSWMeSource.latestSigned(response.firmwares.filter { !$0.signed }),
+                     "nothing signed means nothing to keep")
+    }
+
     func testIgnoresUnsignedVersion() throws {
         let response = try JSONDecoder().decode(IPSWMeSource.DeviceResponse.self, from: fixture("ipswme-device"))
         XCTAssertNil(IPSWMeSource.select(response.firmwares, version: "27.0"))
+    }
+}
+
+final class JamfTests: XCTestCase {
+    func testInventoryCountsManagedPhonesAndPads() throws {
+        let json = Data("""
+        {"mobile_devices": [
+          {"id": 1, "model_identifier": "iPhone16,1", "managed": true},
+          {"id": 2, "model_identifier": "iPhone16,1", "managed": true},
+          {"id": 3, "model_identifier": "iPad14,3", "managed": true},
+          {"id": 4, "model_identifier": "iPhone12,1", "managed": false},
+          {"id": 5, "model_identifier": "AppleTV14,1", "managed": true},
+          {"id": 6, "managed": true}
+        ]}
+        """.utf8)
+        let list = try JSONDecoder().decode(JamfClient.MobileDeviceList.self, from: json)
+
+        let managed = JamfClient.inventory(from: list.mobileDevices, managedOnly: true)
+        XCTAssertEqual(managed.counts, ["iPhone16,1": 2, "iPad14,3": 1])
+        XCTAssertEqual(managed.deviceCount, 3)
+
+        let all = JamfClient.inventory(from: list.mobileDevices, managedOnly: false)
+        XCTAssertEqual(all.counts["iPhone12,1"], 1, "unmanaged devices count when asked")
+    }
+
+    func testURLNormalisation() throws {
+        XCTAssertEqual(try JamfClient.normalizedURL("acme.jamfcloud.com/").absoluteString, "https://acme.jamfcloud.com")
+        XCTAssertEqual(try JamfClient.normalizedURL(" https://jss.acme.eu:8443 ").absoluteString, "https://jss.acme.eu:8443")
+        XCTAssertThrowsError(try JamfClient.normalizedURL("not a url"))
+    }
+
+    func testFormBodyEscapesReservedCharacters() {
+        let body = String(decoding: JamfClient.formBody([("client_secret", "a+b&c=d e")]), as: UTF8.self)
+        XCTAssertEqual(body, "client_secret=a%2Bb%26c%3Dd%20e")
     }
 }
 

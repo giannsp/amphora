@@ -6,6 +6,8 @@ ipsw-mirror \(IPSWMirror.version) — keep the latest signed iOS/iPadOS IPSWs on
 
 USAGE
   ipsw-mirror sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
+  ipsw-mirror sync   --from-jamf          [--include-unmanaged] [same options as above]
+  ipsw-mirror jamf   [--include-unmanaged]
   ipsw-mirror get    <model-identifier>   [--store <dir>] [--configurator]
   ipsw-mirror plan   --models <id,id,...> [--store <dir>]
   ipsw-mirror models [--filter <text>]
@@ -15,6 +17,10 @@ USAGE
   get     Download one model's IPSW now. Deletes nothing.
   plan    Show which files the model list needs and what is already on disk.
   models  List current model identifiers with names and target versions.
+  jamf    Show which models Jamf Pro holds, with device counts.
+
+  Jamf Pro: set JAMF_URL and JAMF_CLIENT_ID, and JAMF_CLIENT_SECRET (or save the secret
+  once in the app, which keeps it in the Keychain). The API role needs Read Mobile Devices.
 
   --store defaults to "\(Store.defaultRoot.path)". Use a dedicated folder:
   sync deletes any .ipsw in it that the model list does not need.
@@ -29,6 +35,8 @@ struct Arguments {
     var configurator = false
     var dryRun = false
     var filter: String?
+    var fromJamf = false
+    var includeUnmanaged = false
 
     init(_ argv: [String]) throws {
         var it = argv.makeIterator()
@@ -45,6 +53,8 @@ struct Arguments {
             case "--configurator": configurator = true
             case "--dry-run": dryRun = true
             case "--filter": filter = it.next()
+            case "--from-jamf": fromJamf = true
+            case "--include-unmanaged": includeUnmanaged = true
             case "-h", "--help": command = "help"
             default:
                 guard !arg.hasPrefix("-") else { throw ArgumentError("Unknown option \(arg)") }
@@ -92,6 +102,17 @@ let printEvent: SyncEngine.EventHandler = { event in
     }
 }
 
+func jamfCredentials() throws -> JamfClient.Credentials {
+    let env = ProcessInfo.processInfo.environment
+    guard let urlText = env["JAMF_URL"], let clientID = env["JAMF_CLIENT_ID"] else {
+        throw ArgumentError("Set JAMF_URL and JAMF_CLIENT_ID (and JAMF_CLIENT_SECRET) to use Jamf Pro.")
+    }
+    guard let secret = env["JAMF_CLIENT_SECRET"] ?? Keychain.secret(for: clientID) else {
+        throw ArgumentError("No client secret: set JAMF_CLIENT_SECRET or save it once in the app.")
+    }
+    return .init(url: try JamfClient.normalizedURL(urlText), clientID: clientID, clientSecret: secret)
+}
+
 func run() async -> Int32 {
     let args: Arguments
     do {
@@ -106,10 +127,17 @@ func run() async -> Int32 {
     do {
         switch args.command {
         case "sync":
-            guard !args.models.isEmpty else { print("sync needs --models\n\n\(usage)"); return 2 }
+            var models = args.models
+            if args.fromJamf {
+                let inventory = try await JamfClient(credentials: try jamfCredentials())
+                    .inventory(managedOnly: !args.includeUnmanaged)
+                models = Array(inventory.counts.keys)
+                log("Jamf Pro: \(inventory.deviceCount) devices, \(models.count) models")
+            }
+            guard !models.isEmpty else { print("sync needs --models or --from-jamf\n\n\(usage)"); return 2 }
             if args.dryRun { log("Dry run: nothing will be downloaded or deleted") }
             let summary = try await engine.sync(
-                SyncOptions(models: args.models, prune: args.prune,
+                SyncOptions(models: models, prune: args.prune,
                             exportToConfigurator: args.configurator, dryRun: args.dryRun),
                 onEvent: printEvent)
             log("Finished: \(summary.downloaded) downloaded, \(summary.alreadyPresent) already present, "
@@ -133,6 +161,15 @@ func run() async -> Int32 {
                       + "\(item.firmware.fileName)  ← \(item.models.joined(separator: ", "))")
             }
             return problems == 0 ? 0 : 1
+
+        case "jamf":
+            let inventory = try await JamfClient(credentials: try jamfCredentials())
+                .inventory(managedOnly: !args.includeUnmanaged)
+            for (id, count) in inventory.counts.sorted(by: { $0.value > $1.value }) {
+                print("\(id.padding(toLength: 12, withPad: " ", startingAt: 0)) \(count)")
+            }
+            print("\(inventory.deviceCount) devices, \(inventory.counts.count) models")
+            return 0
 
         case "models":
             async let feed = SOFAClient().fetch()
