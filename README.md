@@ -10,6 +10,8 @@ Free and open source (MIT). Built by an Apple admin, for Apple admins.
 
 > **Status: early.** Curated, on-demand and Jamf Pro modes work. See the [roadmap](#roadmap).
 
+<p align="center"><img src="docs/images/overview.png" width="780" alt="Amphora's Overview: 6 of 7 models ready to restore, 67 GB on disk, latest release 27.0.1, one model still needs a download"></p>
+
 ## What it does
 
 1. Reads the current iOS/iPadOS releases from [SOFA](https://sofa.macadmins.io), the MacAdmins community feed.
@@ -28,7 +30,14 @@ On-demand downloads of a model you haven't ticked are removed at the next sync.
 
 ## Install
 
-**App:** download the latest release from [Releases](../../releases) (signed and notarized builds arrive with v0.2). Until then, build from source.
+**App:** download `Amphora-<version>.pkg` from [Releases](../../releases). It installs Amphora in `/Applications` and the `amphora` command in `/usr/local/bin`. Releases are signed with Developer ID and notarized by Apple. To deploy with Jamf Pro, see [below](#deploying-with-jamf-pro).
+
+On first launch, a setup assistant walks you through choosing your models (from Jamf Pro or by hand), connecting the Jamf Pro API client, granting Full Disk Access for Apple Configurator, and how Amphora runs in the background.
+
+<p align="center">
+  <img src="docs/images/setup-welcome.png" width="49%" alt="Setup assistant: Welcome to Amphora">
+  <img src="docs/images/setup-jamf.png" width="49%" alt="Setup assistant: Connect to Jamf Pro, with step-by-step help for creating a read-only API client">
+</p>
 
 **Command line:**
 
@@ -51,12 +60,18 @@ The default folder is `/Users/Shared/Amphora`.
 
 ## Using the app
 
+<p align="center"><img src="docs/images/my-devices.png" width="780" alt="My Devices: each model with its restore file status, grouped by OS; the iPad 7 keeps iPadOS 18.7.10, the last release Apple signs for it"></p>
+
 - **My Devices** is your fleet: models from Jamf Pro, or the ones you tick under **All Models**. Each shows whether its restore file is ready.
+- **Older models** that current releases dropped keep the final release Apple still signs for them (above: iPad 7 on iPadOS 18.7.10).
 - **Runs in the background.** Amphora opens at login and lives in the menu bar; closing the window keeps it syncing (every 6 hours by default, and at launch when a sync is due). Downloads keep the Mac from idle sleep until they finish. **Sync Now** (⌘R) any time.
 - **Download now** (↓ on any row) fetches one model immediately. Use it for the odd device that walks in.
 - **Restore:** with Full Disk Access (below), IPSWs are placed in Apple Configurator's cache and its restores start without a download. Without it, drag a model (or a file from **Downloaded**) onto the device in Configurator.
 - **Downloaded** lists every IPSW on disk. Select files and press Delete to remove them; you're told which models use a file first.
 - **Settings** → choose the folder, turn cleanup on or off, and see whether the Apple Configurator cache is working.
+- **Menu bar:** the status at a glance, with Sync Now, while the window is closed.
+
+<p align="center"><img src="docs/images/menu-bar.png" width="300" alt="Menu bar panel: 1 model needs a restore file, last sync 8 minutes ago, Sync Now and Open Amphora buttons"></p>
 
 Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example `iPhone16,1`).
 

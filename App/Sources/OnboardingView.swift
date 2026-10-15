@@ -286,7 +286,7 @@ private struct JamfStep: View {
                 Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 10) {
                     GridRow {
                         Text("Jamf Pro address").gridColumnAlignment(.trailing)
-                        TextField("", text: $model.jamfURL, prompt: Text("https://yourorg.jamfcloud.com"))
+                        TextField("", text: $model.jamfURL, prompt: Text(verbatim: "https://yourorg.jamfcloud.com"))
                             .disabled(model.jamfURLManaged)
                     }
                     GridRow {

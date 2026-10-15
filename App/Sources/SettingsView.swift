@@ -23,7 +23,7 @@ struct SettingsView: View {
                 .disabled(model.sourceManaged)
 
                 if model.modelSource == .jamf {
-                    TextField("Jamf Pro address", text: $model.jamfURL, prompt: Text("https://yourorg.jamfcloud.com"))
+                    TextField("Jamf Pro address", text: $model.jamfURL, prompt: Text(verbatim: "https://yourorg.jamfcloud.com"))
                         .disabled(model.jamfURLManaged)
                     TextField("API client ID", text: $model.jamfClientID)
                         .disabled(model.jamfClientIDManaged)

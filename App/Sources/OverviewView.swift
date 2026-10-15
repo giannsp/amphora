@@ -110,7 +110,7 @@ private struct HeroCard: View {
         let waiting = kept - model.readyCount
         if waiting > 0 {
             return HeroState(symbol: "arrow.down.circle.fill", tint: .orange,
-                         title: "\(plural(waiting, "model")) need a download",
+                         title: waiting == 1 ? "1 model needs a download" : "\(waiting) models need a download",
                          subtitle: "Sync now so the next restore starts without waiting.")
         }
         return HeroState(symbol: "checkmark.seal.fill", tint: .green,
