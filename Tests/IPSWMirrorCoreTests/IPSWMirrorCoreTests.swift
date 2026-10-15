@@ -60,6 +60,28 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(left, ["keep.ipsw", "keep2.ipsw.part", "notes.txt"])
     }
 
+    func testDeleteRemovesFilePartialAndManifestEntry() throws {
+        let store = Store(root: root)
+        for name in ["a.ipsw", "a.ipsw.part", "b.ipsw"] {
+            FileManager.default.createFile(atPath: root.appendingPathComponent(name).path, contents: Data("x".utf8))
+        }
+        try store.writeManifest(Manifest(entries: [
+            .init(file: "a.ipsw", version: "27.0.1", build: "24A446", models: ["iPhone16,1"], sha256: nil),
+            .init(file: "b.ipsw", version: "26.7.1", build: "23H6030", models: ["iPad11,1"], sha256: nil),
+        ]))
+
+        try store.delete(fileNamed: "a.ipsw")
+
+        XCTAssertEqual(store.ipswFiles().map(\.lastPathComponent), ["b.ipsw"])
+        XCTAssertEqual(store.readManifest().versionsByModel(), ["iPad11,1": "26.7.1"])
+    }
+
+    func testDeleteRefusesPathsAndOtherFiles() {
+        let store = Store(root: root)
+        XCTAssertThrowsError(try store.delete(fileNamed: "../escape.ipsw"))
+        XCTAssertThrowsError(try store.delete(fileNamed: "notes.txt"))
+    }
+
     func testManifestRoundTrip() throws {
         let store = Store(root: root)
         let manifest = Manifest(entries: [

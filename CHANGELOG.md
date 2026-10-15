@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- Manual delete: a Downloaded pane listing every IPSW on disk (multi-select, Delete key, Show in Finder) and Delete Downloaded IPSW in each model's menu. Confirms first, names every model a shared file serves, and offers to stop keeping those models current.
+
+### Changed
+
+- Redesigned app: sidebar with Overview, iPhone, iPad, Kept Current and Activity; a status card that says whether restores are ready; models grouped by the OS release they get; overall download progress; hover and context-menu actions.
+
 ## [0.1.0] - unreleased
 
 ### Added

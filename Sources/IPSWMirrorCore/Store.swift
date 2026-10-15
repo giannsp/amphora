@@ -89,6 +89,26 @@ public struct Store: Sendable {
         return removed
     }
 
+    /// Deletes one IPSW chosen by the user, any partial download of it, the copy this app placed in
+    /// Apple Configurator's cache, and its manifest entry. Only plain `.ipsw` names inside the store are accepted.
+    public func delete(fileNamed name: String) throws {
+        guard name.hasSuffix(".ipsw"), !name.contains("/"), name != ".ipsw" else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSFilePathErrorKey: name])
+        }
+        let fm = FileManager.default
+        for url in [root.appendingPathComponent(name), root.appendingPathComponent(name + ".part")]
+        where fm.fileExists(atPath: url.path) {
+            try fm.removeItem(at: url)
+        }
+        var manifest = readManifest()
+        if manifest.exportedToConfigurator.contains(name) {
+            ConfiguratorCache.prune(previouslyExported: [name], keeping: [])
+            manifest.exportedToConfigurator.removeAll { $0 == name }
+        }
+        manifest.entries.removeAll { $0.file == name }
+        try writeManifest(manifest)
+    }
+
     public func readManifest() -> Manifest {
         guard let data = try? Data(contentsOf: manifestURL) else { return Manifest() }
         let decoder = JSONDecoder()

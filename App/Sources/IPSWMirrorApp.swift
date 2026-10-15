@@ -8,8 +8,9 @@ struct IPSWMirrorApp: App {
         Window("IPSW Mirror", id: "main") {
             ContentView()
                 .environment(model)
-                .frame(minWidth: 720, minHeight: 480)
+                .frame(minWidth: 860, minHeight: 560)
         }
+        .defaultSize(width: 1040, height: 700)
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Sync Now") { Task { await model.syncSelected() } }

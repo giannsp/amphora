@@ -1,224 +1,108 @@
 import IPSWMirrorCore
 import SwiftUI
 
+enum Pane: Hashable {
+    case overview
+    case devices(DeviceModel.Family)
+    case kept
+    case files
+    case activity
+}
+
 struct ContentView: View {
     @Environment(AppModel.self) private var model
-    @State private var search = ""
-    @State private var selectedOnly = false
-    @State private var showActivity = false
-
-    private var visibleRows: [AppModel.Row] {
-        model.rows.filter { row in
-            (!selectedOnly || model.selected.contains(row.id))
-                && (search.isEmpty
-                    || row.device.name.localizedCaseInsensitiveContains(search)
-                    || row.device.identifier.localizedCaseInsensitiveContains(search))
-        }
-    }
+    @State private var pane: Pane? = .overview
 
     var body: some View {
-        List {
-            if let error = model.lastError {
-                Label(error, systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-            }
-            ForEach(DeviceModel.Family.allCases, id: \.self) { family in
-                let rows = visibleRows.filter { $0.device.family == family }
-                if !rows.isEmpty {
-                    Section(family == .iPhone ? "iPhone" : "iPad") {
-                        ForEach(rows) { row in
-                            ModelRow(row: row)
-                        }
-                    }
-                }
-            }
-        }
-        .overlay {
-            if model.isLoading && model.rows.isEmpty {
-                ProgressView("Loading current releases…")
-            } else if !model.rows.isEmpty && visibleRows.isEmpty {
-                ContentUnavailableView.search(text: search)
-            }
-        }
-        .searchable(text: $search, prompt: "Model name or identifier")
-        .toolbar {
-            ToolbarItemGroup {
-                Toggle(isOn: $selectedOnly) {
-                    Label("Selected Only", systemImage: "line.3.horizontal.decrease.circle")
-                }
-                .help("Show only the models you keep current")
+        NavigationSplitView {
+            List(selection: $pane) {
+                Label("Overview", systemImage: "square.grid.2x2")
+                    .tag(Pane.overview)
 
+                Section("Devices") {
+                    Label("iPhone", systemImage: "iphone")
+                        .badge(model.keptCount(.iPhone))
+                        .tag(Pane.devices(.iPhone))
+                    Label("iPad", systemImage: "ipad")
+                        .badge(model.keptCount(.iPad))
+                        .tag(Pane.devices(.iPad))
+                }
+
+                Section("Library") {
+                    Label("Kept Current", systemImage: "checkmark.circle")
+                        .badge(model.attentionRows.count)
+                        .tag(Pane.kept)
+                    Label("Downloaded", systemImage: "internaldrive")
+                        .tag(Pane.files)
+                    Label("Activity", systemImage: "list.bullet.rectangle")
+                        .tag(Pane.activity)
+                }
+            }
+            .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
+        } detail: {
+            switch pane ?? .overview {
+            case .overview:
+                OverviewView { pane = .devices($0) }
+            case let .devices(family):
+                DeviceListView(scope: .family(family))
+                    .id(family)
+            case .kept:
+                DeviceListView(scope: .kept)
+            case .files:
+                FilesView()
+            case .activity:
+                ActivityView()
+            }
+        }
+        .confirmationDialog(
+            model.deletionTitle,
+            isPresented: Binding(
+                get: { model.pendingDeletion != nil },
+                set: { if !$0 { model.pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) { model.confirmDelete(stopKeeping: false) }
+            if !model.pendingKeptModels.isEmpty {
+                Button("Delete and Stop Keeping Current", role: .destructive) {
+                    model.confirmDelete(stopKeeping: true)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(model.deletionMessage)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
                 if model.isBusy {
-                    Button {
-                        model.cancel()
-                    } label: {
-                        Label("Cancel", systemImage: "stop.circle")
+                    if let progress = model.progress, progress.fileCount > 0 {
+                        ProgressView(value: progress.fraction)
+                            .frame(width: 110)
+                            .help("\(Int(progress.fraction * 100))% of \(plural(progress.fileCount, "file"))")
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
                     }
-                    .help("Stop the current download. It resumes next time.")
+                    Button("Cancel", systemImage: "stop.circle") { model.cancel() }
+                        .help("Stop now. Downloads resume where they left off next time.")
                 } else {
-                    Button {
+                    Button("Sync Now", systemImage: "arrow.triangle.2.circlepath") {
                         Task { await model.syncSelected() }
-                    } label: {
-                        Label("Sync Now", systemImage: "arrow.triangle.2.circlepath")
                     }
                     .disabled(model.selected.isEmpty)
-                    .help("Download what the selected models need, then clean up")
+                    .help("Download what kept models need, then clean up (⌘R)")
                 }
             }
-        }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            StatusBar(showActivity: $showActivity)
         }
         .task {
             await model.load()
             // Keep current while the app is open. Background sync without the app arrives in v0.3.
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(6 * 60 * 60))
+                try? await Task.sleep(for: .seconds(AppModel.syncInterval))
+                guard !Task.isCancelled else { break }
                 await model.load()
                 await model.syncSelected()
             }
         }
-    }
-}
-
-private struct ModelRow: View {
-    @Environment(AppModel.self) private var model
-    let row: AppModel.Row
-
-    private var isSelected: Binding<Bool> {
-        Binding(
-            get: { model.selected.contains(row.id) },
-            set: { keep in
-                if keep { model.selected.insert(row.id) } else { model.selected.remove(row.id) }
-            }
-        )
-    }
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Toggle("Keep current", isOn: isSelected)
-                .labelsHidden()
-                .disabled(model.selectionManaged)
-                .help(model.selectionManaged ? "Set by your organization" : "Keep this model's IPSW current")
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.device.name)
-                Text(row.device.identifier)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            StatusView(status: model.status[row.id] ?? .missing, target: row.targetVersion)
-                .frame(width: 170, alignment: .trailing)
-
-            Button {
-                Task { await model.downloadNow(row.id) }
-            } label: {
-                Image(systemName: "arrow.down.circle")
-            }
-            .buttonStyle(.borderless)
-            .disabled(model.isBusy)
-            .help(model.selected.contains(row.id)
-                  ? "Download now"
-                  : "Download now. Removed at the next sync unless this model is ticked.")
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-private struct StatusView: View {
-    let status: AppModel.Status
-    let target: String
-
-    var body: some View {
-        switch status {
-        case let .ready(version):
-            Label(version, systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-        case let .outdated(version):
-            Label("\(version) → \(target)", systemImage: "arrow.up.circle")
-                .foregroundStyle(.orange)
-        case .missing:
-            Text("\(target) · not on disk")
-                .foregroundStyle(.secondary)
-        case .queued:
-            Text("Queued")
-                .foregroundStyle(.secondary)
-        case let .downloading(fraction):
-            HStack(spacing: 6) {
-                ProgressView(value: fraction)
-                    .frame(width: 100)
-                Text(fraction, format: .percent.precision(.fractionLength(0)))
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-            }
-        case .verifying:
-            HStack(spacing: 6) {
-                ProgressView().controlSize(.small)
-                Text("Verifying")
-                    .foregroundStyle(.secondary)
-            }
-        case let .failed(message):
-            Label("Failed", systemImage: "exclamationmark.triangle.fill")
-                .foregroundStyle(.red)
-                .help(message)
-        }
-    }
-}
-
-private struct StatusBar: View {
-    @Environment(AppModel.self) private var model
-    @Binding var showActivity: Bool
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Divider()
-            HStack {
-                Text(summary)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(showActivity ? "Hide Activity" : "Show Activity") {
-                    showActivity.toggle()
-                }
-                .buttonStyle(.link)
-            }
-            .font(.callout)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-
-            if showActivity {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 2) {
-                            ForEach(Array(model.log.enumerated()), id: \.offset) { index, line in
-                                Text(line)
-                                    .font(.caption.monospaced())
-                                    .textSelection(.enabled)
-                                    .id(index)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(8)
-                    }
-                    .frame(height: 140)
-                    .background(.background.secondary)
-                    .onChange(of: model.log.count) { _, count in
-                        proxy.scrollTo(count - 1, anchor: .bottom)
-                    }
-                }
-            }
-        }
-        .background(.bar)
-    }
-
-    private var summary: String {
-        let size = ByteCountFormatter.string(fromByteCount: model.bytesOnDisk, countStyle: .file)
-        var parts = ["\(model.selected.count) selected", "\(size) on disk"]
-        if let last = model.lastSync {
-            parts.append("last sync \(last.formatted(.relative(presentation: .named)))")
-        }
-        return parts.joined(separator: " · ")
     }
 }
