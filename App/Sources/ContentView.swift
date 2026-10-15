@@ -60,10 +60,10 @@ struct ContentView: View {
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete", role: .destructive) { Task { await model.confirmDelete(stopKeeping: false) } }
+            Button("Delete", role: .destructive) { model.confirmDelete(stopKeeping: false) }
             if !model.pendingKeptModels.isEmpty && model.modelSource == .curated {
                 Button("Delete and Stop Keeping Current", role: .destructive) {
-                    Task { await model.confirmDelete(stopKeeping: true) }
+                    model.confirmDelete(stopKeeping: true)
                 }
             }
             Button("Cancel", role: .cancel) {}

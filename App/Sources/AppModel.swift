@@ -452,10 +452,16 @@ final class AppModel {
         return text
     }
 
-    func confirmDelete(stopKeeping: Bool) async {
+    /// Called by the confirmation's button. Takes what to delete *now*: closing the dialog clears
+    /// `pendingDeletion` straight after, before any async work could read it.
+    func confirmDelete(stopKeeping: Bool) {
         guard let names = pendingDeletion else { return }
         let models = pendingFiles.flatMap(\.models)
         pendingDeletion = nil
+        Task { await delete(names, models: models, stopKeeping: stopKeeping) }
+    }
+
+    private func delete(_ names: Set<String>, models: [String], stopKeeping: Bool) async {
         if isBusy {
             append("Stopping the sync to delete files")
             cancel()
