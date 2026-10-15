@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import AmphoraCore
 import Observation
@@ -370,13 +371,23 @@ final class AppModel {
     var nextSync: Date? { lastSync?.addingTimeInterval(syncInterval) }
 
     /// Menu bar icon: what state the restore files are in, at a glance.
-    var menuBarSymbol: String {
-        if isBusy { return "arrow.down.circle" }
-        if failedCount > 0 || configuratorBlocked || (modelSource == .jamf && jamfError != nil) {
-            return "exclamationmark.circle"
-        }
-        if keptRows.isEmpty { return "circle.dashed" }
-        return readyCount == keptRows.count ? "checkmark.circle" : "circle.bottomhalf.filled"
+    /// Something that needs the user: failed downloads, no access to Configurator's cache, or Jamf Pro errors.
+    var needsAttention: Bool {
+        failedCount > 0 || configuratorBlocked || (modelSource == .jamf && jamfError != nil)
+    }
+
+    /// How full the menu bar amphora is: the share of your models that are ready to restore.
+    /// During a sync, bytes downloaded for the missing ones count too, so the jar visibly fills.
+    var menuBarFill: Double {
+        let kept = keptRows.count
+        guard kept > 0 else { return 0 }
+        let ready = Double(readyCount)
+        guard isBusy, let progress, progress.fileCount > 0 else { return ready / Double(kept) }
+        return min(1, (ready + progress.fraction * Double(kept - readyCount)) / Double(kept))
+    }
+
+    var menuBarIcon: NSImage {
+        MenuBarIcon.image(fill: menuBarFill, badge: needsAttention && !isBusy ? .attention : .none)
     }
 
     var isSyncDue: Bool {

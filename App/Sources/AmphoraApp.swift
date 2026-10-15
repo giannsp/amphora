@@ -33,7 +33,7 @@ struct AmphoraApp: App {
             MenuBarView()
                 .environment(model)
         } label: {
-            Image(systemName: model.menuBarSymbol)
+            Image(nsImage: model.menuBarIcon)
                 .accessibilityLabel("Amphora")
         }
         .menuBarExtraStyle(.window)

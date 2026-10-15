@@ -9,8 +9,10 @@ struct MenuBarView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: model.menuBarSymbol)
-                    .font(.title2)
+                Image(nsImage: MenuBarIcon.image(fill: model.menuBarFill,
+                                                 badge: model.needsAttention && !model.isBusy ? .attention : .none,
+                                                 height: 28))
+                    .renderingMode(.template)
                     .foregroundStyle(tint)
                     .frame(width: 28)
                     .accessibilityHidden(true)
@@ -88,7 +90,7 @@ struct MenuBarView: View {
 
     private var tint: Color {
         if model.isBusy { return .accentColor }
-        if model.failedCount > 0 || model.configuratorBlocked { return .orange }
+        if model.needsAttention { return .orange }
         return model.keptRows.isEmpty || model.readyCount < model.keptRows.count ? .secondary : .green
     }
 
