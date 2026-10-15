@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Added
 
+- Release tooling: `scripts/release.sh` builds, signs, notarizes and packages the app and CLI into one .pkg, and generates a Jamf PPPC (Full Disk Access) profile for that build. Jamf deployment guide in docs/DEPLOYING.md.
 - Background sync: opens at login, keeps running in the menu bar when the window closes (no Dock icon), syncs at launch when due and then every 1–24 hours (default 6). A menu bar panel shows status, progress, Sync Now, Stop and Open. Downloads keep the Mac from idle sleep.
 - Jamf Pro mode: keep every iPhone and iPad model in your Jamf Pro inventory current, through a read-only API client (Read Mobile Devices). Secret in the Keychain, connection test, device counts per model, last good inventory kept when Jamf is unreachable or returns nothing, so no IPSW is ever deleted because of a Jamf problem.
 - Models current releases no longer support keep the final release Apple still signs for them (for example a 2017 iPad Pro on its last iPadOS). Only models Apple signs nothing for are skipped, and they're still listed so the fleet adds up.

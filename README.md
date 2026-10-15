@@ -74,6 +74,10 @@ What it does and doesn't do:
 
 From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `ipsw-mirror sync --from-jamf`.
 
+## Deploying with Jamf Pro
+
+[docs/DEPLOYING.md](docs/DEPLOYING.md) covers the package, the Full Disk Access profile each release ships with, managed settings and login items.
+
 ## Managed settings
 
 Settings live in the `consulting.techne.ipswmirror` preference domain, so an MDM configuration profile can set them. Values set by a profile show as locked in the app.
