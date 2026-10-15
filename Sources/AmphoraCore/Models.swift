@@ -12,6 +12,14 @@ public struct DeviceModel: Hashable, Sendable, Codable, Identifiable {
     public var id: String { identifier }
     public var family: Family { identifier.hasPrefix("iPad") ? .iPad : .iPhone }
 
+    /// Model identifiers in free text. Identifiers contain a comma themselves ("iPhone16,1"), so a list like
+    /// "iPhone16,1,iPad14,3" can't be split on commas; this finds each "<letters><n>,<n>" instead.
+    /// Spaces, commas and newlines all work as separators. Duplicates are dropped, order is kept.
+    public static func identifiers(in text: String) -> [String] {
+        var seen = Set<String>()
+        return text.matches(of: #/[A-Za-z]+\d+,\d+/#).map { String($0.output) }.filter { seen.insert($0).inserted }
+    }
+
     public init(identifier: String, name: String) {
         self.identifier = identifier
         self.name = name

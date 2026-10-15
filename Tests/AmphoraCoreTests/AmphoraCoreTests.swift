@@ -135,6 +135,15 @@ final class StoreTests: XCTestCase {
     }
 }
 
+final class ModelListTests: XCTestCase {
+    func testIdentifiersContainCommas() {
+        XCTAssertEqual(DeviceModel.identifiers(in: "iPhone16,1,iPhone16,2,iPad14,3"),
+                       ["iPhone16,1", "iPhone16,2", "iPad14,3"])
+        XCTAssertEqual(DeviceModel.identifiers(in: "iPhone18,1 iPad7,11\niPhone18,1"), ["iPhone18,1", "iPad7,11"])
+        XCTAssertEqual(DeviceModel.identifiers(in: "nothing here"), [])
+    }
+}
+
 final class ChecksumTests: XCTestCase {
     func testSHA256() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

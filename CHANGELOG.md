@@ -16,6 +16,12 @@ First public release, signed and notarized.
 - App icon: a glazed terracotta amphora on an Aegean-blue tile.
 - `SECURITY.md`: what Amphora touches on the network and on disk, and how to report a vulnerability privately.
 
+### Fixed
+
+- `amphora sync|plan --models` split the list on commas, which broke every identifier (`iPhone16,1`). Lists are now read as identifiers, separated by commas, spaces or newlines.
+- When SOFA's version for a model is no longer signed (SOFA can lag a point release, e.g. iPadOS 18.7.9 → 18.7.10 for older iPads), Amphora now downloads the newest signed release instead of nothing, and shows it as ready.
+
+### Changed
 ### Changed
 
 - Renamed to **Amphora**, after the Greek painted jar made to keep what you'll need later. New bundle ID `consulting.techne.amphora`, preference domain, Keychain item and CLI name (`amphora`). Settings, the Jamf secret and an existing download folder carry over automatically. Managed preferences and PPPC profiles must be re-scoped to the new bundle ID.

@@ -70,6 +70,12 @@ public actor SyncEngine {
                 if let version = targets[model] {
                     if let firmware = try await source.signedFirmware(for: model, version: version) {
                         byFile[firmware.fileName, default: (firmware: firmware, models: [])].models.append(model)
+                    } else if let firmware = try await source.latestSignedFirmware(for: model) {
+                        // SOFA and Apple disagree for a moment: SOFA can lag a point release (its version is
+                        // no longer signed), or list a release before its IPSW is published. Either way the
+                        // newest signed release is what a restore can use right now.
+                        await onEvent(.warning("\(model): \(version) isn't signed, using \(firmware.version)"))
+                        byFile[firmware.fileName, default: (firmware: firmware, models: [])].models.append(model)
                     } else {
                         await onEvent(.warning("\(model): no signed IPSW for \(version) published yet"))
                         problems += 1

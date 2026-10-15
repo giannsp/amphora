@@ -486,7 +486,9 @@ final class AppModel {
             default: break
             }
             if let version = onDisk[row.id] {
-                status[row.id] = version == row.targetVersion ? .ready(version) : .outdated(version)
+                // Newer than SOFA's version counts as ready: SOFA can lag a point release that Apple already signs.
+                let current = version.compare(row.targetVersion, options: .numeric) != .orderedAscending
+                status[row.id] = current ? .ready(version) : .outdated(version)
             } else if status[row.id]?.isFailed != true {
                 status[row.id] = .missing
             }

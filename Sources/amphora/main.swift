@@ -44,7 +44,7 @@ struct Arguments {
         while let arg = it.next() {
             switch arg {
             case "--models":
-                models = (it.next() ?? "").split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+                models = DeviceModel.identifiers(in: it.next() ?? "")
                     .filter { !$0.isEmpty }
             case "--store":
                 guard let path = it.next() else { throw ArgumentError("--store needs a folder") }
