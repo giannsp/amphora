@@ -24,8 +24,8 @@ targets:
       base:
         PRODUCT_NAME: Amphora
         PRODUCT_BUNDLE_IDENTIFIER: consulting.techne.amphora
-        MARKETING_VERSION: 0.1.0
-        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.2.0
+        CURRENT_PROJECT_VERSION: 2
         GENERATE_INFOPLIST_FILE: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities

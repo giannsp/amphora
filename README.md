@@ -155,6 +155,10 @@ cd App && xcodegen && open Amphora.xcodeproj
 
 The engine (`Sources/AmphoraCore`) is a Swift package with no UI. The app (`App/`) and the CLI (`Sources/amphora`) are thin layers on top of it.
 
+## Security
+
+Amphora holds a Jamf Pro API secret and uses Full Disk Access, so [SECURITY.md](SECURITY.md) explains exactly what it touches, and how to report a vulnerability privately.
+
 ## Credits
 
 - [SOFA](https://sofa.macadmins.io) by the MacAdmins Open Source community, for release data.

@@ -72,6 +72,6 @@ public enum MirrorError: LocalizedError, Sendable {
 }
 
 public enum AppInfo {
-    public static let version = "0.1.0"
+    public static let version = "0.2.0"
     public static let userAgent = "Amphora/\(version)"
 }
