@@ -9,11 +9,12 @@
 #
 # One-time setup (see docs/RELEASING.md):
 #   - "Developer ID Application" and "Developer ID Installer" certificates in your login keychain
-#   - xcrun notarytool store-credentials ipsw-mirror --apple-id <id> --team-id <team>
+#   - xcrun notarytool store-credentials ipsw-mirror --apple-id <id> --team-id <team>  (not for --no-notarize)
 #
 # Usage:
-#   scripts/release.sh              full release: signed, notarized, stapled
-#   scripts/release.sh --unsigned   local test package: no Developer ID, no notarization
+#   scripts/release.sh                 public release: Developer ID signed, notarized, stapled
+#   scripts/release.sh --no-notarize   Developer ID signed, not notarized: for Jamf deployments only
+#   scripts/release.sh --unsigned      local test package: no Developer ID, no notarization
 #
 # Env: TEAM_ID (detected from the certificate if unset), NOTARY_PROFILE (default ipsw-mirror),
 #      DEVELOPER_DIR to pick an Xcode.
@@ -27,9 +28,23 @@ BUNDLE_ID="consulting.techne.ipswmirror"
 APP_NAME="IPSW Mirror"
 NOTARY_PROFILE=${NOTARY_PROFILE:-ipsw-mirror}
 UNSIGNED=0
-[[ "${1:-}" == "--unsigned" ]] && UNSIGNED=1
+NOTARIZE=1
+for arg in "$@"; do
+    case "$arg" in
+        --unsigned)    UNSIGNED=1; NOTARIZE=0 ;;
+        --no-notarize) NOTARIZE=0 ;;
+        -h|--help)     sed -n '2,20p' "$0"; exit 0 ;;
+        *)             print -u2 "Unknown option: $arg"; exit 2 ;;
+    esac
+done
 
 step() { print -P "\n%F{blue}==>%f %B$1%b"; }
+
+# Command Line Tools alone have no XCTest or xcodebuild: use a full Xcode if one is installed.
+if [[ -z "${DEVELOPER_DIR:-}" && "$(xcode-select -p)" == *CommandLineTools* ]]; then
+    XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | head -1)
+    [[ -n "$XCODE" ]] && export DEVELOPER_DIR="$XCODE/Contents/Developer"
+fi
 fail() { print -P "%F{red}error:%f $1" >&2; exit 1; }
 
 # ---------------- version: one source of truth, checked ----------------
@@ -51,8 +66,12 @@ else
     [[ -n "$INSTALLER_IDENTITY" ]] || fail "No \"Developer ID Installer\" certificate in the keychain."
     TEAM_ID=${TEAM_ID:-$(print -r -- "$APP_IDENTITY" | sed -nE 's/.*\(([A-Z0-9]{10})\)$/\1/p')}
     [[ -n "$TEAM_ID" ]] || fail "Couldn't read the team ID from \"$APP_IDENTITY\". Set TEAM_ID."
-    xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
-        || fail "No notarytool credentials named \"$NOTARY_PROFILE\". See docs/RELEASING.md."
+    if (( NOTARIZE )); then
+        xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 \
+            || fail "No notarytool credentials named \"$NOTARY_PROFILE\". See docs/RELEASING.md, or use --no-notarize for a Jamf-only build."
+    else
+        print -P "%F{yellow}Not notarized: fine for Jamf deployments, not for public downloads.%f"
+    fi
     print "App:       $APP_IDENTITY"
     print "Installer: $INSTALLER_IDENTITY"
 fi
@@ -62,7 +81,12 @@ mkdir -p "$BUILD" "$DIST"
 
 # ---------------- tests ----------------
 step "Running tests"
-(cd "$ROOT" && swift test 2>&1 | tail -3)
+print "Xcode: ${DEVELOPER_DIR:-$(xcode-select -p)}"
+if ! (cd "$ROOT" && swift test >"$BUILD/test.log" 2>&1); then
+    grep -E "error|failed" "$BUILD/test.log" | head -20
+    fail "Tests failed. Full output: build/test.log"
+fi
+grep -E "Executed [0-9]+ tests" "$BUILD/test.log" | tail -1
 
 # ---------------- app ----------------
 step "Building $APP_NAME $VERSION"
@@ -117,7 +141,7 @@ else
 fi
 
 # ---------------- notarize ----------------
-if (( ! UNSIGNED )); then
+if (( NOTARIZE )); then
     step "Notarizing (this takes a few minutes)"
     xcrun notarytool submit "$PKG" --keychain-profile "$NOTARY_PROFILE" --wait
     xcrun stapler staple "$PKG"
@@ -199,4 +223,5 @@ plutil -lint "$PROFILE" >>"$LOG" 2>&1 || fail "Generated profile is not a valid 
 step "Done"
 ls -lh "$DIST"
 (( UNSIGNED )) && print -P "\n%F{yellow}Unsigned: the PPPC profile's code requirement only matches this test build.%f"
-(( UNSIGNED )) || print "\nNext: create GitHub release v$VERSION with the .pkg, its .sha256 and the .mobileconfig (docs/RELEASING.md)."
+(( ! UNSIGNED && ! NOTARIZE )) && print -P "\n%F{yellow}Not notarized: deploy with Jamf only. Downloads from the web would be blocked by Gatekeeper.%f"
+(( NOTARIZE )) && print "\nNext: create GitHub release v$VERSION with the .pkg, its .sha256 and the .mobileconfig (docs/RELEASING.md)."

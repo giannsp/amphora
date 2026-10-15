@@ -16,6 +16,8 @@ A checklist for cutting a release. Do every step, every time.
 
 Check it all with a test package: `scripts/release.sh --unsigned` needs none of the above and shows whether the build and packaging work.
 
+**Jamf-only builds before notarization is set up:** `scripts/release.sh --no-notarize` needs only steps 1 and 2. The result is Developer ID-signed, so its Full Disk Access profile stays valid across updates, and Jamf-installed packages aren't quarantined, so Gatekeeper doesn't block them. Don't publish these on GitHub: a downloaded copy would be blocked.
+
 ## Each release
 
 1. **Test on a clean Mac.** Fresh store folder, sync two or three models, restore one device from the result.
