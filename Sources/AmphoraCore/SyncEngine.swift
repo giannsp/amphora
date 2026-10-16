@@ -136,12 +136,14 @@ public actor SyncEngine {
         for item in items {
             try Task.checkCancellation()
             let firmware = item.firmware
+            var changed = false
             if !item.onDisk {
                 await onEvent(.downloadStarted(firmware))
                 if options.dryRun { continue }
                 do {
                     try await fetch(firmware, onEvent: onEvent)
                     summary.downloaded += 1
+                    changed = true
                     await onEvent(.completed(firmware))
                 } catch is CancellationError {
                     throw CancellationError()
@@ -156,10 +158,16 @@ public actor SyncEngine {
                     try ConfiguratorCache.export(store.path(for: firmware))
                     if !manifest.exportedToConfigurator.contains(firmware.fileName) {
                         manifest.exportedToConfigurator.append(firmware.fileName)
+                        changed = true
                     }
                 } catch {
                     await onEvent(.warning("Configurator export failed for \(firmware.fileName): \(error.localizedDescription)"))
                 }
+            }
+            // Record each finished file right away: the app shows it as ready during the sync, and a
+            // cancelled or interrupted sync doesn't forget what it already downloaded.
+            if changed, !options.dryRun {
+                try? store.writeManifest(updated(manifest, with: items, pruned: false))
             }
         }
 

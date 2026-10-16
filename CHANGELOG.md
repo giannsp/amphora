@@ -23,6 +23,7 @@ First public release, signed and notarized.
 - `amphora sync|plan --models` split the list on commas, which broke every identifier (`iPhone16,1`). Lists are now read as identifiers, separated by commas, spaces or newlines.
 - When SOFA's version for a model is no longer signed (SOFA can lag a point release, e.g. iPadOS 18.7.9 → 18.7.10 for older iPads), Amphora now downloads the newest signed release instead of nothing, and shows it as ready.
 - Overview said "1 model need a download".
+- During a sync, models whose file had just finished fell back to "Not downloaded" as soon as the next file started; they showed as ready only when the whole sync ended. Each verified file is now recorded immediately, which also means a cancelled sync no longer forgets the files it finished.
 - The Jamf Pro address placeholder looked like a filled-in link instead of a hint.
 
 ### Changed
