@@ -196,7 +196,9 @@ public actor SyncEngine {
 
     private func fetch(_ firmware: Firmware, onEvent: @escaping EventHandler) async throws {
         let part = store.partPath(for: firmware)
-        try await downloader.download(firmware.url, to: part, expectedSize: firmware.size) { received, total in
+        let digest = Checksum.digest(for: firmware)
+        try await downloader.download(firmware.url, to: part, expectedSize: firmware.size,
+                                      digest: digest) { received, total in
             Task { await onEvent(.progress(firmware, received: received, total: total)) }
         }
 
@@ -207,7 +209,14 @@ public actor SyncEngine {
         }
 
         await onEvent(.verifying(firmware))
-        guard try Checksum.verify(part, against: firmware) else {
+        // Hashed during the download. Should that not cover exactly the file on disk, read it back instead.
+        let verified: Bool
+        if let digest, digest.byteCount == actual {
+            verified = digest.matches
+        } else {
+            verified = try Checksum.verify(part, against: firmware)
+        }
+        guard verified else {
             try? FileManager.default.removeItem(at: part)
             throw MirrorError.checksumMismatch(firmware.fileName)
         }

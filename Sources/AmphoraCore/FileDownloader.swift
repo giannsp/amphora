@@ -12,16 +12,18 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
         var received: Int64
         let total: Int64
         let progress: Progress?
+        let digest: Checksum.Digest?
         let continuation: CheckedContinuation<Void, Error>
         var lastReport = Date.distantPast
 
         init(handle: FileHandle, resumedFrom: Int64, total: Int64, progress: Progress?,
-             continuation: CheckedContinuation<Void, Error>) {
+             digest: Checksum.Digest?, continuation: CheckedContinuation<Void, Error>) {
             self.handle = handle
             self.resumedFrom = resumedFrom
             self.received = resumedFrom
             self.total = total
             self.progress = progress
+            self.digest = digest
             self.continuation = continuation
         }
     }
@@ -30,9 +32,13 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
     private var transfers: [Int: Transfer] = [:]
     private let lock = NSLock()
 
-    public override init() {
+    public convenience override init() {
+        self.init(configuration: .default)
+    }
+
+    /// `configuration` is for tests (a mock URLProtocol); the app uses the default.
+    init(configuration config: URLSessionConfiguration) {
         super.init()
-        let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120
         config.timeoutIntervalForResource = 12 * 60 * 60
         config.httpAdditionalHeaders = ["User-Agent": AppInfo.userAgent]
@@ -42,14 +48,17 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
     }
 
     /// Downloads `url` into `partURL`. Returns when the transfer ends; the caller checks size and checksum.
+    /// With a `digest`, every byte of the file is hashed as it's written (including what a previous attempt
+    /// left behind), so verifying doesn't mean reading the whole file back from disk.
     public func download(_ url: URL, to partURL: URL, expectedSize: Int64,
-                         progress: Progress? = nil) async throws {
+                         digest: Checksum.Digest? = nil, progress: Progress? = nil) async throws {
         let fm = FileManager.default
         var existing = Self.size(of: partURL)
         if existing > expectedSize {
             try fm.removeItem(at: partURL)
             existing = 0
         }
+        if existing > 0 { try digest?.update(contentsOf: partURL) }
         if existing == expectedSize, existing > 0 { return }
         if !fm.fileExists(atPath: partURL.path) {
             fm.createFile(atPath: partURL.path, contents: nil)
@@ -69,7 +78,7 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
                 lock.withLock {
                     transfers[task.taskIdentifier] = Transfer(handle: handle, resumedFrom: existing,
                                                               total: expectedSize, progress: progress,
-                                                              continuation: continuation)
+                                                              digest: digest, continuation: continuation)
                 }
                 task.resume()
             }
@@ -101,6 +110,7 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
             if transfer.resumedFrom > 0 {
                 try? transfer.handle.truncate(atOffset: 0)
                 transfer.received = 0
+                transfer.digest?.reset()
             }
             completionHandler(.allow)
         default:
@@ -118,6 +128,7 @@ public final class FileDownloader: NSObject, URLSessionDataDelegate, @unchecked 
             finish(dataTask.taskIdentifier, error: error)
             return
         }
+        transfer.digest?.update(data)
         transfer.received += Int64(data.count)
         let now = Date()
         if now.timeIntervalSince(transfer.lastReport) >= 0.5 {

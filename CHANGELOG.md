@@ -5,6 +5,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Changed
+
+- **Lighter downloads.** Each IPSW is now checksummed while it downloads, instead of being read back from disk afterwards: that saves reading 10–15 GB per file and the wait at "Verifying". A resumed download hashes what's already on disk first, so every file is still verified end to end.
+- **SOFA is always asked directly.** Amphora used to go through the system's URL cache, which SOFA allows to keep the feed for 4 hours, so a sync right after an Apple release could miss it. It now always asks SOFA, sending the version it already has; when nothing changed, SOFA answers "not modified" with no data. The last feed is kept in `~/Library/Caches/consulting.techne.amphora`.
+
 ## [0.2.0] - 2026-10-16
 
 First public release, signed and notarized.
