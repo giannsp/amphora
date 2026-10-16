@@ -5,7 +5,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
-## [0.2.0] - 2026-10-15
+## [0.2.0] - 2026-10-16
 
 First public release, signed and notarized.
 
@@ -26,7 +26,6 @@ First public release, signed and notarized.
 - During a sync, models whose file had just finished fell back to "Not downloaded" as soon as the next file started; they showed as ready only when the whole sync ended. Each verified file is now recorded immediately, which also means a cancelled sync no longer forgets the files it finished.
 - The Jamf Pro address placeholder looked like a filled-in link instead of a hint.
 
-### Changed
 ### Changed
 
 - Renamed to **Amphora**, after the Greek painted jar made to keep what you'll need later. New bundle ID `consulting.techne.amphora`, preference domain, Keychain item and CLI name (`amphora`). Settings, the Jamf secret and an existing download folder carry over automatically. Managed preferences and PPPC profiles must be re-scoped to the new bundle ID.
