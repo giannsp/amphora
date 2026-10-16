@@ -2,7 +2,7 @@
 
 # Amphora
 
-**IPSW restore files, stored and ready.** Amphora keeps the latest signed iOS and iPadOS restore files on your service desk Mac, so restoring an iPhone or iPad never starts with a 12 GB download.
+**IPSW restore files, stored and ready.** Amphora keeps the latest signed iOS, iPadOS and macOS restore files on your service desk Mac, so restoring an iPhone, iPad or Apple silicon Mac never starts with a 12–27 GB download.
 
 *An amphora is the painted Greek jar made to keep what you'll need later. The project comes from [Techne](https://techne.consulting): τέχνη, craft.*
 
@@ -14,13 +14,15 @@ Free and open source (MIT). Built by an Apple admin, for Apple admins.
 
 ## What it does
 
-1. Reads the current iOS/iPadOS releases from [SOFA](https://sofa.macadmins.io), the MacAdmins community feed.
+1. Reads the current iOS, iPadOS and macOS releases from [SOFA](https://sofa.macadmins.io), the MacAdmins community feed.
 2. Works out, for each model you care about, the latest release of the newest OS that still supports it.
 3. Finds the signed IPSW for that release and downloads it. Interrupted downloads resume.
 4. Verifies every file against its published SHA-256 before using it.
 5. Deletes IPSWs your models no longer need, but **only after every download succeeded**, so you're never left without a usable file.
 
 Several models usually share one IPSW, so 40 models might need only 15 files.
+
+**Macs:** every Apple silicon Mac restores from the same file for a given macOS version (`UniversalMac_…_Restore.ipsw`, about 27 GB), so a whole Mac fleet usually needs one file; a brand-new model can need its own build for its first weeks. Restore them in Apple Configurator over USB-C, in DFU mode. Intel Macs can't be restored from an IPSW (they reinstall from macOS Recovery), so Amphora skips them.
 
 ## What it deletes
 
@@ -79,11 +81,11 @@ Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example
 
 ## Jamf Pro
 
-Instead of ticking models by hand, let Jamf Pro decide: Amphora keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have.
+Instead of ticking models by hand, let Jamf Pro decide: Amphora keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have. Turn on **Include Apple silicon Macs** in Settings to cover your Macs too.
 
 Amphora reads the inventory at the start of every sync: at launch, every 6 hours by default (1–24 in Settings), and whenever you click **Sync Now**. A new model is downloaded in that same sync. A model that's gone keeps its file for 14 days (configurable), then the next sync deletes it. Amphora tracks models, not devices: a fifth iPhone 15 changes nothing, the first iPhone 17 does.
 
-1. In Jamf Pro → Settings → **API Roles and Clients**, create a role with only **Read Mobile Devices**.
+1. In Jamf Pro → Settings → **API Roles and Clients**, create a role with only **Read Mobile Devices** (add **Read Computers** to include Macs).
 2. Create an API client with that role, enable it, and generate a client secret.
 3. In Amphora → Settings → Models, choose **Jamf Pro inventory**, enter the address, client ID and secret, and click **Test Connection**.
 
@@ -112,6 +114,7 @@ Settings live in the `consulting.techne.amphora` preference domain, so an MDM co
 | `JamfURL` | string | Jamf Pro address, e.g. `https://yourorg.jamfcloud.com` |
 | `JamfClientID` | string | API client ID. The secret is entered once in the app and kept in the Keychain |
 | `JamfManagedDevicesOnly` | boolean | Count only managed devices (default `true`) |
+| `JamfIncludeMacs` | boolean | Include Apple silicon Macs from the computer inventory; needs Read Computers (default `false`) |
 | `JamfRemovedModelGraceDays` | integer | Days a model's file is kept after its last device leaves Jamf Pro, 0–90 (default `14`; `0` deletes at the next sync) |
 | `StorePath` | string | Folder for IPSWs |
 | `PruneOldIPSWs` | boolean | Delete IPSWs no longer needed (default `true`) |
@@ -162,7 +165,8 @@ No telemetry and no accounts. Requests carry a `User-Agent` of `Amphora/<version
 
 - **v0.1 — Usable without Jamf.** Curated and on-demand modes, app and CLI, verify and prune, drag to restore, manual delete.
 - **v0.2 — Jamf-driven.** Model list from Jamf Pro inventory through a read-only API client, Keychain storage *(done)*; signed and notarized `.pkg`.
-- **v0.3 — Runs on its own.** Menu bar, open at login, background sync *(done)*; notifications, Universal Mac IPSWs for Apple Silicon.
+- **v0.3 — Runs on its own, and Macs.** Menu bar, open at login, background sync, notifications *(done)*; Universal Mac IPSWs for Apple silicon Macs *(done)*.
+- **Later.** Homebrew cask; a heads-up from SOFA before a release lands.
 
 ## Building from source
 

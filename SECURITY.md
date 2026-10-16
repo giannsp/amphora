@@ -15,7 +15,7 @@ Fixes go into the latest release only. Please update before reporting.
 ## What Amphora does, for your review
 
 - **Network:** talks only to `sofafeed.macadmins.io`, `api.ipsw.me`, Apple's CDN (`updates.cdn-apple.com` and related hosts) and the Jamf Pro address you configure. No telemetry.
-- **Jamf Pro:** uses an API client you create with only *Read Mobile Devices*. It reads model identifiers and whether each device is managed, and never writes to Jamf Pro.
+- **Jamf Pro:** uses an API client you create with only *Read Mobile Devices*, plus *Read Computers* if you include Macs. It reads model identifiers and whether each device is managed, and never writes to Jamf Pro.
 - **Secrets:** the API client secret is stored in the login Keychain, never in preferences, logs or configuration profiles.
 - **Files:** every IPSW is checked against its published SHA-256 before use. Amphora deletes only `.ipsw` files in its own folder, and in Apple Configurator's cache only files it placed there.
 - **Permissions:** Full Disk Access is used only to write into Apple Configurator's firmware cache. Turn off "Place restore files in Apple Configurator's folder" and Amphora doesn't need it.

@@ -27,7 +27,8 @@ struct OverviewView: View {
                              value: ByteCountFormatter.string(fromByteCount: model.diskUsage, countStyle: .file),
                              detail: plural(model.fileCount, "IPSW file"), symbol: "internaldrive")
                     StatTile(title: "Latest release", value: model.latestVersion ?? "—",
-                             detail: "iOS and iPadOS", symbol: "sparkles")
+                             detail: model.latestMacVersion.map { "iOS and iPadOS · macOS \($0)" } ?? "iOS and iPadOS",
+                             symbol: "sparkles")
                     StatTile(title: "Last sync", value: lastSyncValue, detail: nextSyncDetail,
                              symbol: "clock.arrow.circlepath")
                 }
@@ -94,7 +95,7 @@ private struct HeroCard: View {
             return HeroState(symbol: "server.rack", tint: .secondary,
                              title: model.jamfConfigured ? "No supported models in Jamf Pro yet" : "Connect to Jamf Pro",
                              subtitle: model.jamfConfigured
-                                 ? "Amphora keeps every iPhone and iPad model in your inventory current."
+                                 ? "Amphora keeps every iPhone and iPad model in your inventory current, and Macs if you include them."
                                  : "Add your Jamf Pro address and a read-only API client in Settings.")
         }
         if kept == 0 {

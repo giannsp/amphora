@@ -17,6 +17,8 @@ final class AppModel {
         var id: String { device.identifier }
         /// OS major the model targets, e.g. 27. Older models stay on an older major.
         var major: Int { Int(targetVersion.split(separator: ".").first ?? "") ?? 0 }
+        /// Macs get macOS; iOS and macOS share version numbers, so lists group them apart.
+        var isMac: Bool { device.family == .mac }
     }
 
     enum Status: Equatable {
@@ -94,6 +96,7 @@ final class AppModel {
         static let jamfURL = "JamfURL"
         static let jamfClientID = "JamfClientID"
         static let jamfManagedOnly = "JamfManagedDevicesOnly"
+        static let jamfIncludeMacs = "JamfIncludeMacs"
         static let jamfCounts = "JamfLastInventory"
         static let jamfFetched = "JamfLastInventoryDate"
         static let jamfGraceDays = "JamfRemovedModelGraceDays"
@@ -187,6 +190,16 @@ final class AppModel {
     var jamfManagedOnly: Bool {
         didSet { defaults.set(jamfManagedOnly, forKey: Key.jamfManagedOnly) }
     }
+    /// Count Apple silicon Macs from Jamf Pro too. Off unless chosen: one Mac restore file is about 27 GB.
+    var jamfIncludeMacs: Bool {
+        didSet {
+            defaults.set(jamfIncludeMacs, forKey: Key.jamfIncludeMacs)
+            if modelSource == .jamf && jamfConfigured { Task { await refreshJamf() } }
+        }
+    }
+    var jamfIncludeMacsManaged: Bool { defaults.objectIsForced(forKey: Key.jamfIncludeMacs) }
+    /// What the last inventory skipped and why (a missing privilege, Intel Macs).
+    var jamfNotes: [String] = []
     /// Last successful inventory, kept so the app still knows the fleet when Jamf is unreachable.
     /// Days a model's file stays after the model leaves Jamf Pro (0: delete at the next sync).
     var jamfGraceDays: Int {
@@ -246,6 +259,7 @@ final class AppModel {
         jamfURL = defaults.string(forKey: Key.jamfURL) ?? ""
         jamfClientID = defaults.string(forKey: Key.jamfClientID) ?? ""
         jamfManagedOnly = defaults.object(forKey: Key.jamfManagedOnly) as? Bool ?? true
+        jamfIncludeMacs = defaults.bool(forKey: Key.jamfIncludeMacs)
         jamfCounts = defaults.dictionary(forKey: Key.jamfCounts) as? [String: Int] ?? [:]
         jamfFetched = defaults.object(forKey: Key.jamfFetched) as? Date
         jamfGraceDays = max(0, defaults.object(forKey: Key.jamfGraceDays) as? Int ?? ModelRetention.defaultGraceDays)
@@ -357,7 +371,10 @@ final class AppModel {
             }
             let credentials = JamfClient.Credentials(url: try JamfClient.normalizedURL(jamfURL),
                                                      clientID: jamfClientID, clientSecret: secret)
-            let inventory = try await JamfClient(credentials: credentials).inventory(managedOnly: jamfManagedOnly)
+            let inventory = try await JamfClient(credentials: credentials)
+                .inventory(managedOnly: jamfManagedOnly, includeMacs: jamfIncludeMacs)
+            jamfNotes = inventory.notes
+            for note in inventory.notes { append("Jamf Pro: \(note)") }
             jamfCounts = inventory.counts
             jamfFetched = inventory.fetched
             // A model that just left Jamf Pro keeps its file for a while (ModelRetention).
@@ -460,7 +477,12 @@ final class AppModel {
     }
 
     var latestVersion: String? {
-        rows.map(\.targetVersion).max { $0.compare($1, options: .numeric) == .orderedAscending }
+        rows.filter { !$0.isMac }.map(\.targetVersion).max { $0.compare($1, options: .numeric) == .orderedAscending }
+    }
+
+    /// Latest macOS, shown only once a Mac is in My Devices.
+    var latestMacVersion: String? {
+        keptRows.filter(\.isMac).map(\.targetVersion).max { $0.compare($1, options: .numeric) == .orderedAscending }
     }
 
     func keptCount(_ family: DeviceModel.Family) -> Int {
@@ -478,10 +500,18 @@ final class AppModel {
         defer { isLoading = false }
         do {
             async let feed = SOFAClient().fetch()
+            async let macFeed = SOFAClient(url: SOFAClient.macOSURL).fetch()
             async let devices = IPSWMeSource().devices()
-            let targets = try await feed.targetVersions()
-            let names = Dictionary((try? await devices)?.map { ($0.identifier, $0.name) } ?? [],
+            var targets = try await feed.targetVersions()
+            var names = Dictionary((try? await devices)?.map { ($0.identifier, $0.name) } ?? [],
                                    uniquingKeysWith: { a, _ in a })
+            // Macs are an addition: if the macOS feed is unreachable, iPhones and iPads still load.
+            if let mac = try? await macFeed {
+                targets.merge(mac.targetVersions()) { ios, _ in ios }
+                names.merge(mac.modelNames()) { ipswMe, _ in ipswMe }
+            } else {
+                append("⚠︎ Couldn't load macOS releases from SOFA; Macs are skipped for now.")
+            }
             if !names.isEmpty { deviceNames = names }
             sofaRows = targets
                 .map { Row(device: DeviceModel(identifier: $0.key, name: names[$0.key] ?? $0.key), targetVersion: $0.value) }
@@ -664,7 +694,7 @@ final class AppModel {
         for id in options.models { status[id] = .queued }
 
         let engine = SyncEngine(store: store)
-        // Don't let idle sleep cut a 12 GB download short. The display may still sleep.
+        // Don't let idle sleep cut a 12–27 GB download short. The display may still sleep.
         let activity = ProcessInfo.processInfo.beginActivity(
             options: [.userInitiated, .idleSystemSleepDisabled], reason: "Downloading IPSW files")
         defer { ProcessInfo.processInfo.endActivity(activity) }

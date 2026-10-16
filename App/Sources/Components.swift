@@ -14,8 +14,16 @@ extension Animation {
 struct DeviceGlyph: View {
     let family: DeviceModel.Family
 
+    private var symbol: String {
+        switch family {
+        case .iPhone: "iphone"
+        case .iPad: "ipad"
+        case .mac: "laptopcomputer"
+        }
+    }
+
     var body: some View {
-        Image(systemName: family == .iPhone ? "iphone" : "ipad")
+        Image(systemName: symbol)
             .font(.system(size: 15, weight: .medium))
             .foregroundStyle(.secondary)
             .frame(width: 30, height: 30)

@@ -35,6 +35,8 @@ struct ContentView: View {
                         .tag(Pane.devices(.iPhone))
                     Label("iPad", systemImage: "ipad")
                         .tag(Pane.devices(.iPad))
+                    Label("Mac", systemImage: "laptopcomputer")
+                        .tag(Pane.devices(.mac))
                 }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)

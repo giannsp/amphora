@@ -167,7 +167,7 @@ private struct WelcomeStep: View {
             }
             VStack(alignment: .leading, spacing: 14) {
                 feature("arrow.down.circle", "Always the latest signed IPSW",
-                        "For every iPhone and iPad model you support, downloaded, verified and replaced when Apple releases a new version.")
+                        "For every iPhone, iPad and Apple silicon Mac you support, downloaded, verified and replaced when Apple releases a new version.")
                 feature("bolt.fill", "Restores start right away",
                         "Apple Configurator finds the file already on this Mac. No 12 GB wait at the service desk.")
                 feature("menubar.rectangle", "Works quietly in the background",
@@ -207,7 +207,7 @@ private struct SourceStep: View {
                        subtitle: "Amphora keeps a restore file for every model in this list. You can change this later in Settings.")
             VStack(spacing: 12) {
                 card(.jamf, symbol: "server.rack", title: "My Jamf Pro inventory", badge: "Recommended",
-                     text: "Every iPhone and iPad model you own, read from Jamf Pro with a read-only API client. New models are picked up automatically.")
+                     text: "Every iPhone and iPad model you own, and Macs if you like, read from Jamf Pro with a read-only API client. New models are picked up automatically.")
                 card(.curated, symbol: "checklist", title: "Models I choose", badge: nil,
                      text: "Pick models from a list. Good without Jamf Pro, or when you only restore a few models.")
             }
@@ -303,6 +303,11 @@ private struct JamfStep: View {
                         Color.clear.frame(width: 1, height: 1)
                         Toggle("Count managed devices only", isOn: $model.jamfManagedOnly)
                     }
+                    GridRow {
+                        Color.clear.frame(width: 1, height: 1)
+                        Toggle("Include Apple silicon Macs (about 27 GB, needs Read Computers)", isOn: $model.jamfIncludeMacs)
+                            .disabled(model.jamfIncludeMacsManaged)
+                    }
                 }
                 .textFieldStyle(.roundedBorder)
 
@@ -318,7 +323,7 @@ private struct JamfStep: View {
                 DisclosureGroup(isExpanded: $showHelp) {
                     VStack(alignment: .leading, spacing: 8) {
                         helpStep(1, "In Jamf Pro, open **Settings → System → API Roles and Clients**.")
-                        helpStep(2, "**API Roles → New:** name it \"Amphora (read-only)\" and add only the privilege **Read Mobile Devices**.")
+                        helpStep(2, "**API Roles → New:** name it \"Amphora (read-only)\" and add only the privilege **Read Mobile Devices**, plus **Read Computers** if you include Macs.")
                         helpStep(3, "**API Clients → New:** name it \"Amphora\", choose that role, and set **Enable API client**.")
                         helpStep(4, "Click **Generate client secret** and copy the client ID and secret here. Jamf shows the secret once.")
                         Text("The secret is stored in this Mac's Keychain, never in preferences or logs.")
@@ -399,7 +404,7 @@ private struct ModelPickerStep: View {
         VStack(alignment: .leading, spacing: 0) {
             StepHeader(symbol: "checklist",
                        title: "Choose your models",
-                       subtitle: "Tick every iPhone and iPad model your service desk restores. Jamf Pro and Apple list them by identifier, for example iPhone16,1.")
+                       subtitle: "Tick every iPhone, iPad and Mac model your service desk restores. Jamf Pro and Apple list them by identifier, for example iPhone16,1 or Mac16,1.")
             HStack {
                 TextField("Search by name or identifier", text: $search)
                     .textFieldStyle(.roundedBorder)

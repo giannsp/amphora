@@ -16,6 +16,8 @@
     <string>00000000-0000-0000-0000-000000000000</string>
     <key>JamfManagedDevicesOnly</key>
     <true/>
+    <key>JamfIncludeMacs</key>
+    <false/>
     <key>JamfRemovedModelGraceDays</key>
     <integer>14</integer>
     <key>StorePath</key>

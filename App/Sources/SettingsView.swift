@@ -38,6 +38,11 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Only managed devices", isOn: $model.jamfManagedOnly)
+                    Toggle(isOn: $model.jamfIncludeMacs) {
+                        Text("Include Apple silicon Macs")
+                        Text("Needs \"Read Computers\" on the API role. One restore file, about 27 GB, serves every Apple silicon Mac; Intel Macs are skipped.")
+                    }
+                    .disabled(model.jamfIncludeMacsManaged)
                     LabeledContent {
                         Stepper(value: $model.jamfGraceDays, in: 0...90) {
                             Text(model.jamfGraceDays == 0 ? "Delete at next sync" : plural(model.jamfGraceDays, "day"))
@@ -61,6 +66,11 @@ struct SettingsView: View {
                             .disabled(!model.jamfConfigured || model.isFetchingJamf)
                         }
                     }
+                    ForEach(model.jamfNotes, id: \.self) { note in
+                        Label(note, systemImage: "info.circle")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
                     if !model.jamfUnsupported.isEmpty {
                         Text("No signed release: \(model.jamfUnsupported.map { "\(model.displayName($0)) (\($0))" }.joined(separator: ", ")). They're listed in My Devices, with nothing to download.")
                             .font(.callout)
@@ -71,7 +81,7 @@ struct SettingsView: View {
                 Text("Models")
             } footer: {
                 if model.modelSource == .jamf {
-                    Text("Create an API Role with only \"Read Mobile Devices\" and an API Client using it (Jamf Pro → Settings → API Roles and Clients). Amphora reads model identifiers only, and never changes anything in Jamf Pro. The secret is stored in your Keychain.")
+                    Text("Create an API Role with only \"Read Mobile Devices\" (and \"Read Computers\" for Macs) and an API Client using it (Jamf Pro → Settings → API Roles and Clients). Amphora reads model identifiers only, and never changes anything in Jamf Pro. The secret is stored in your Keychain.")
                         .foregroundStyle(.secondary)
                 }
             }

@@ -1,7 +1,8 @@
 import AmphoraCore
 import SwiftUI
 
-/// Models grouped by the OS release they get, newest first, so it's obvious which models stay on an older iOS.
+/// Models grouped by the OS release they get, newest first, so it's obvious which models stay on an older OS.
+/// iOS and macOS share version numbers, so Macs always form their own groups, after iPhones and iPads.
 struct DeviceListView: View {
     enum Scope: Hashable {
         case family(DeviceModel.Family)
@@ -9,9 +10,10 @@ struct DeviceListView: View {
     }
 
     private struct ReleaseGroup: Identifiable {
+        let isMac: Bool
         let major: Int
         let rows: [AppModel.Row]
-        var id: Int { major }
+        var id: String { "\(isMac ? "macOS" : "iOS")-\(major)" }
     }
 
     @Environment(AppModel.self) private var model
@@ -56,9 +58,9 @@ struct DeviceListView: View {
     }
 
     private var groups: [ReleaseGroup] {
-        Dictionary(grouping: rows, by: \.major)
-            .map { ReleaseGroup(major: $0.key, rows: $0.value) }
-            .sorted { $0.major > $1.major }
+        Dictionary(grouping: rows, by: { "\($0.isMac)-\($0.major)" })
+            .compactMap { _, rows in rows.first.map { ReleaseGroup(isMac: $0.isMac, major: $0.major, rows: rows) } }
+            .sorted { $0.isMac != $1.isMac ? !$0.isMac : $0.major > $1.major }
     }
 
     var body: some View {
@@ -130,11 +132,13 @@ struct DeviceListView: View {
     }
 
     private func header(for group: ReleaseGroup) -> some View {
-        let newest = model.rows.map(\.major).max() ?? group.major
-        let name: String = switch scope {
-        case .family(.iPhone): "iOS"
-        case .family(.iPad): "iPadOS"
-        case .kept: "iOS / iPadOS"
+        let newest = model.rows.filter { $0.isMac == group.isMac }.map(\.major).max() ?? group.major
+        let name: String = if group.isMac { "macOS" } else {
+            switch scope {
+            case .family(.iPhone): "iOS"
+            case .family(.iPad): "iPadOS"
+            default: "iOS / iPadOS"
+            }
         }
         return HStack(spacing: 6) {
             Text("\(name) \(group.major)")
@@ -152,6 +156,7 @@ struct DeviceListView: View {
         switch scope {
         case .family(.iPhone): return "iPhone"
         case .family(.iPad): return "iPad"
+        case .family(.mac): return "Mac"
         case .kept: return "My Devices"
         }
     }
@@ -160,6 +165,8 @@ struct DeviceListView: View {
         let kept = scopedRows.filter { model.isKept($0.id) }.count
         let jamf = model.modelSource == .jamf
         switch scope {
+        case .family(.mac):
+            return "Every Apple silicon Mac · one restore file serves them all · \(kept) in My Devices"
         case .family:
             return "Every \(scope == .family(.iPhone) ? "iPhone" : "iPad") a current release supports · \(kept) in My Devices"
         case .kept:
@@ -202,7 +209,7 @@ private struct DownloadBar: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("\(plural(missing, "model")) \(missing == 1 ? "needs its" : "need their") restore file")
                         .fontWeight(.medium)
-                    Text("Download now, so a restore never waits for a 10–15 GB download.")
+                    Text("Download now, so a restore never waits for a 10–27 GB download.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -226,7 +233,7 @@ private struct UnsupportedRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            DeviceGlyph(family: identifier.hasPrefix("iPad") ? .iPad : .iPhone)
+            DeviceGlyph(family: DeviceModel.family(of: identifier))
             VStack(alignment: .leading, spacing: 1) {
                 Text(model.displayName(identifier))
                     .fontWeight(.medium)

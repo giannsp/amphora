@@ -66,12 +66,13 @@ final class Notifier: NSObject, UNUserNotificationCenterDelegate {
     }
 
     private static func osName(for models: [String]) -> String {
-        let phones = models.contains { $0.hasPrefix("iPhone") }
-        let pads = models.contains { $0.hasPrefix("iPad") }
-        switch (phones, pads) {
-        case (true, true): return "iOS and iPadOS"
-        case (false, true): return "iPadOS"
-        default: return "iOS"
+        let families = Set(models.map(DeviceModel.family(of:)))
+        let names = [(DeviceModel.Family.iPhone, "iOS"), (.iPad, "iPadOS"), (.mac, "macOS")]
+            .filter { families.contains($0.0) }.map(\.1)
+        switch names.count {
+        case 0: return "iOS"
+        case 1: return names[0]
+        default: return names.dropLast().joined(separator: ", ") + " and " + names.last!
         }
     }
 

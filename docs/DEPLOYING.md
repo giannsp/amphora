@@ -10,7 +10,7 @@ Everything a service desk Mac needs, deployed so nobody has to click anything. E
 
 In Jamf Pro → Settings → **API Roles and Clients**:
 
-1. Create a role with only **Read Mobile Devices**.
+1. Create a role with only **Read Mobile Devices**. Add **Read Computers** if Amphora should include Apple silicon Macs (`JamfIncludeMacs`).
 2. Create a client with that role, enable it, and generate a secret.
 
 Amphora reads model identifiers and whether each device is managed. It never writes to Jamf Pro.
@@ -51,7 +51,7 @@ Keep the secret out of policy scripts where you can: Jamf script parameters are 
 
 ## Checklist
 
-- [ ] API role with Read Mobile Devices only, client enabled
+- [ ] API role with Read Mobile Devices only (plus Read Computers for Macs), client enabled
 - [ ] Package policy scoped to the service desk Macs
 - [ ] Full Disk Access profile from the same release
 - [ ] Settings profile with Jamf address and client ID

@@ -5,6 +5,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [Unreleased]
 
+### Added
+
+- **Apple silicon Macs.** Amphora now keeps macOS restore files too. Every Apple silicon Mac restores from one shared file per macOS version (`UniversalMac_…_Restore.ipsw`, about 27 GB), so a Mac fleet usually needs a single download. Pick Macs under **All Models → Mac**, or turn on **Include Apple silicon Macs** for the Jamf Pro inventory (needs the *Read Computers* privilege; `JamfIncludeMacs` as a managed setting). If the role lacks one privilege, the other kind of device still syncs, with a note in Settings. Intel Macs can't be restored from an IPSW and are skipped. Command line: Mac models work with `--models` and `get`, `sync --from-jamf --include-macs`, and `amphora models` lists Macs.
+
 ### Changed
 
 - **Lighter downloads.** Each IPSW is now checksummed while it downloads, instead of being read back from disk afterwards: that saves reading 10–15 GB per file and the wait at "Verifying". A resumed download hashes what's already on disk first, so every file is still verified end to end.
