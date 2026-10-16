@@ -48,24 +48,34 @@ public actor SyncEngine {
 
     let store: Store
     let sofa: SOFAClient
+    let macSOFA: SOFAClient
     let source: FirmwareSource
     let downloader: FileDownloader
 
-    public init(store: Store, sofa: SOFAClient = SOFAClient(), source: FirmwareSource = IPSWMeSource(),
-                downloader: FileDownloader = FileDownloader()) {
+    public init(store: Store, sofa: SOFAClient = SOFAClient(), macSOFA: SOFAClient = SOFAClient(url: SOFAClient.macOSURL),
+                source: FirmwareSource = IPSWMeSource(), downloader: FileDownloader = FileDownloader()) {
         self.store = store
         self.sofa = sofa
+        self.macSOFA = macSOFA
         self.source = source
         self.downloader = downloader
     }
 
     /// Resolves each model to the signed IPSW it needs, grouped by file. Does not touch the disk.
     public func plan(models: [String], onEvent: @escaping EventHandler) async throws -> (items: [PlannedItem], problems: Int) {
-        let targets = try await sofa.fetch().targetVersions()
+        var targets = try await sofa.fetch().targetVersions()
+        if models.contains(where: DeviceModel.isAppleSiliconMac) {
+            targets.merge(try await macSOFA.fetch().targetVersions()) { ios, _ in ios }
+        }
         var byFile: [String: (firmware: Firmware, models: [String])] = [:]
         var problems = 0
 
         for model in Set(models).sorted() {
+            if DeviceModel.family(of: model) == .mac, !DeviceModel.isAppleSiliconMac(model) {
+                // Not an error: Intel Macs are reinstalled from macOS Recovery, never from an IPSW.
+                await onEvent(.warning("\(model): Intel Macs can't be restored from an IPSW, skipped"))
+                continue
+            }
             do {
                 if let version = targets[model] {
                     if let firmware = try await source.signedFirmware(for: model, version: version) {

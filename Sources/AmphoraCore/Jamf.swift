@@ -1,10 +1,11 @@
 import Foundation
 
-/// Reads which iPhone and iPad models an organization owns from Jamf Pro.
+/// Reads which iPhone, iPad and (optionally) Mac models an organization owns from Jamf Pro.
 ///
 /// Auth: an API Client (Jamf Pro → Settings → API Roles and Clients) whose role has only
-/// "Read Mobile Devices". The client-credentials token also works for the Classic API, whose
-/// mobile device list returns every device's model identifier in one request.
+/// "Read Mobile Devices", plus "Read Computers" for Macs. The client-credentials token also works for the
+/// Classic API, whose mobile device list returns every device's model identifier in one request; Macs come
+/// from the Jamf Pro API's computer inventory, a page at a time.
 public struct JamfClient: Sendable {
     public struct Credentials: Sendable, Equatable {
         public var url: URL
@@ -23,12 +24,15 @@ public struct JamfClient: Sendable {
         public let counts: [String: Int]
         public let deviceCount: Int
         public let fetched: Date
+        /// Things worth telling the user that didn't stop the inventory: a missing privilege for one kind
+        /// of device, or Intel Macs that were skipped.
+        public var notes: [String] = []
     }
 
     public enum JamfError: LocalizedError, Equatable {
         case invalidURL(String)
         case badCredentials
-        case missingPrivilege
+        case missingPrivilege(String)
         case unexpected(Int)
         case noDevices
 
@@ -38,12 +42,12 @@ public struct JamfClient: Sendable {
                 return "\"\(text)\" isn't a valid Jamf Pro address. Use something like https://yourorg.jamfcloud.com"
             case .badCredentials:
                 return "Jamf Pro rejected the client ID or secret."
-            case .missingPrivilege:
-                return "The API client's role needs the \"Read Mobile Devices\" privilege."
+            case let .missingPrivilege(privilege):
+                return "The API client's role needs the \"\(privilege)\" privilege."
             case let .unexpected(code):
                 return "Jamf Pro answered with HTTP \(code)."
             case .noDevices:
-                return "Jamf Pro returned no mobile devices. Nothing was changed."
+                return "Jamf Pro returned no devices. Nothing was changed."
             }
         }
     }
@@ -71,20 +75,80 @@ public struct JamfClient: Sendable {
 
     /// Model identifier → device count. Throws `.noDevices` rather than returning an empty
     /// inventory, so a misconfigured client can never make a sync delete everything.
-    public func inventory(managedOnly: Bool = true) async throws -> Inventory {
+    ///
+    /// With `includeMacs`, Apple silicon Macs are counted too. A role missing one of the two privileges
+    /// still yields the other kind of device, with a note, unless that leaves nothing at all.
+    public func inventory(managedOnly: Bool = true, includeMacs: Bool = false) async throws -> Inventory {
         let token = try await accessToken()
+        var counts: [String: Int] = [:]
+        var total = 0
+        var notes: [String] = []
 
-        var request = URLRequest(url: credentials.url.appendingPathComponent("JSSResource/mobiledevices"), timeoutInterval: 120)
+        do {
+            let mobile = Self.inventory(from: try await mobileDevices(token: token), managedOnly: managedOnly)
+            counts.merge(mobile.counts, uniquingKeysWith: +)
+            total += mobile.deviceCount
+        } catch JamfError.missingPrivilege(let privilege) where includeMacs {
+            notes.append("iPhones and iPads skipped: the API role needs \"\(privilege)\".")
+        }
+
+        if includeMacs {
+            do {
+                let macs = Self.macInventory(from: try await computers(token: token), managedOnly: managedOnly)
+                counts.merge(macs.counts, uniquingKeysWith: +)
+                total += macs.deviceCount
+                if macs.intelSkipped > 0 {
+                    notes.append("\(macs.intelSkipped) Intel \(macs.intelSkipped == 1 ? "Mac" : "Macs") skipped: "
+                                 + "Intel Macs can't be restored from an IPSW.")
+                }
+            } catch JamfError.missingPrivilege(let privilege) {
+                guard total > 0 else { throw JamfError.missingPrivilege(privilege) }
+                notes.append("Macs skipped: add \"\(privilege)\" to the API role.")
+            }
+        }
+
+        guard total > 0 else { throw JamfError.noDevices }
+        return Inventory(counts: counts, deviceCount: total, fetched: Date(), notes: notes)
+    }
+
+    private func mobileDevices(token: String) async throws -> [MobileDevice] {
+        let (data, response) = try await session.data(for: request("JSSResource/mobiledevices", token: token))
+        try Self.check(response, privilege: "Read Mobile Devices")
+        return try JSONDecoder().decode(MobileDeviceList.self, from: data).mobileDevices
+    }
+
+    /// Jamf Pro API computer inventory, only the sections needed, 500 at a time.
+    private func computers(token: String) async throws -> [Computer] {
+        var all: [Computer] = []
+        var page = 0
+        while page < 400 {   // 200,000 Macs: a safety stop, not a real limit
+            var components = URLComponents(url: credentials.url.appendingPathComponent("api/v1/computers-inventory"),
+                                           resolvingAgainstBaseURL: false)!
+            components.queryItems = [
+                URLQueryItem(name: "section", value: "GENERAL"),
+                URLQueryItem(name: "section", value: "HARDWARE"),
+                URLQueryItem(name: "page", value: String(page)),
+                URLQueryItem(name: "page-size", value: "500"),
+                URLQueryItem(name: "sort", value: "id:asc"),
+            ]
+            var pageRequest = request("", token: token)
+            pageRequest.url = components.url
+            let (data, response) = try await session.data(for: pageRequest)
+            try Self.check(response, privilege: "Read Computers")
+            let result = try JSONDecoder().decode(ComputerPage.self, from: data)
+            all += result.results
+            if result.results.isEmpty || all.count >= result.totalCount { break }
+            page += 1
+        }
+        return all
+    }
+
+    private func request(_ path: String, token: String) -> URLRequest {
+        var request = URLRequest(url: credentials.url.appendingPathComponent(path), timeoutInterval: 120)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
-
-        let (data, response) = try await session.data(for: request)
-        try Self.check(response)
-        let list = try JSONDecoder().decode(MobileDeviceList.self, from: data)
-        let inventory = Self.inventory(from: list.mobileDevices, managedOnly: managedOnly)
-        guard inventory.deviceCount > 0 else { throw JamfError.noDevices }
-        return inventory
+        return request
     }
 
     // MARK: Internals
@@ -106,6 +170,37 @@ public struct JamfClient: Sendable {
             case modelIdentifier = "model_identifier"
             case managed
         }
+    }
+
+    struct ComputerPage: Decodable {
+        let totalCount: Int
+        let results: [Computer]
+    }
+
+    struct Computer: Decodable {
+        struct General: Decodable {
+            struct RemoteManagement: Decodable { let managed: Bool? }
+            let remoteManagement: RemoteManagement?
+        }
+        struct Hardware: Decodable { let modelIdentifier: String? }
+        let general: General?
+        let hardware: Hardware?
+    }
+
+    static func macInventory(from computers: [Computer], managedOnly: Bool)
+        -> (counts: [String: Int], deviceCount: Int, intelSkipped: Int) {
+        var counts: [String: Int] = [:]
+        var total = 0
+        var intel = 0
+        for computer in computers {
+            if managedOnly && computer.general?.remoteManagement?.managed == false { continue }
+            guard let id = computer.hardware?.modelIdentifier?.trimmingCharacters(in: .whitespaces), !id.isEmpty
+            else { continue }
+            guard DeviceModel.isAppleSiliconMac(id) else { intel += 1; continue }
+            counts[id, default: 0] += 1
+            total += 1
+        }
+        return (counts, total, intel)
     }
 
     static func inventory(from devices: [MobileDevice], managedOnly: Bool) -> Inventory {
@@ -150,12 +245,12 @@ public struct JamfClient: Sendable {
         return Data(fields.map { "\(encode($0.0))=\(encode($0.1))" }.joined(separator: "&").utf8)
     }
 
-    private static func check(_ response: URLResponse) throws {
+    private static func check(_ response: URLResponse, privilege: String = "Read Mobile Devices") throws {
         let status = (response as? HTTPURLResponse)?.statusCode ?? -1
         switch status {
         case 200..<300: return
         case 401: throw JamfError.badCredentials
-        case 403: throw JamfError.missingPrivilege
+        case 403: throw JamfError.missingPrivilege(privilege)
         default: throw JamfError.unexpected(status)
         }
     }

@@ -60,7 +60,7 @@ public struct IPSWMeSource: FirmwareSource {
     public func devices() async throws -> [DeviceModel] {
         let all = try await http.getJSON([DeviceEntry].self, from: Self.base.appendingPathComponent("devices"))
         return all
-            .filter { $0.identifier.hasPrefix("iPhone") || $0.identifier.hasPrefix("iPad") }
+            .filter { DeviceModel.isRestorable($0.identifier) }
             .map { DeviceModel(identifier: $0.identifier, name: $0.name) }
     }
 

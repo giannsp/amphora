@@ -1,11 +1,18 @@
 import Foundation
 
-/// The parts of the SOFA iOS/iPadOS feed this project uses.
-/// Feed: https://sofafeed.macadmins.io/v1/ios_data_feed.json — maintained by the MacAdmins community.
+/// The parts of the SOFA feeds this project uses: the iOS/iPadOS feed and the macOS feed.
+/// Feeds: https://sofafeed.macadmins.io/v1/ios_data_feed.json and …/macos_data_feed.json, maintained by the
+/// MacAdmins community. Both list each OS major's latest release; they differ in how models are listed.
 public struct SOFAFeed: Decodable, Sendable {
     public struct OSVersion: Decodable, Sendable {
+        /// "27" in the iOS feed, "Golden Gate 27" in the macOS feed.
         public let osVersion: String
         public let latest: Latest
+
+        /// The OS major number, whichever way the feed spells it.
+        public var major: Int? {
+            osVersion.split(separator: " ").last.flatMap { Int($0) }
+        }
 
         enum CodingKeys: String, CodingKey {
             case osVersion = "OSVersion"
@@ -16,6 +23,7 @@ public struct SOFAFeed: Decodable, Sendable {
     public struct Latest: Decodable, Sendable {
         public let productVersion: String
         public let build: String?
+        /// Model identifiers in the iOS feed; board IDs ("J314sAP") in the macOS feed, which lists models below.
         public let supportedDevices: [String]
 
         enum CodingKeys: String, CodingKey {
@@ -32,30 +40,64 @@ public struct SOFAFeed: Decodable, Sendable {
         }
     }
 
+    /// macOS feed only: each Mac model, its name and the OS majors it supports.
+    public struct MacModel: Decodable, Sendable {
+        public let marketingName: String?
+        public let osVersions: [Int]
+
+        enum CodingKeys: String, CodingKey {
+            case marketingName = "MarketingName"
+            case osVersions = "OSVersions"
+        }
+
+        public init(from decoder: Decoder) throws {
+            let c = try decoder.container(keyedBy: CodingKeys.self)
+            marketingName = try c.decodeIfPresent(String.self, forKey: .marketingName)
+            osVersions = try c.decodeIfPresent([Int].self, forKey: .osVersions) ?? []
+        }
+    }
+
     public let updateHash: String?
     public let osVersions: [OSVersion]
+    public let models: [String: MacModel]?
 
     enum CodingKeys: String, CodingKey {
         case updateHash = "UpdateHash"
         case osVersions = "OSVersions"
+        case models = "Models"
     }
 
     /// Model identifier → latest version of the newest OS major that still supports it.
     /// A model dropped by iOS 27 but supported by iOS 26 maps to the latest 26.x.
+    /// From the macOS feed, only Apple silicon Macs: Intel Macs can't be restored from an IPSW.
     public func targetVersions() -> [String: String] {
         var result: [String: String] = [:]
-        let newestFirst = osVersions.sorted { (Int($0.osVersion) ?? 0) > (Int($1.osVersion) ?? 0) }
+        let newestFirst = osVersions.sorted { ($0.major ?? 0) > ($1.major ?? 0) }
         for os in newestFirst {
-            for model in os.latest.supportedDevices where result[model] == nil {
+            for model in os.latest.supportedDevices
+            where result[model] == nil && model.wholeMatch(of: #/[A-Za-z]+\d+,\d+/#) != nil {
                 result[model] = os.latest.productVersion
             }
         }
+        let latestByMajor = Dictionary(newestFirst.compactMap { os in os.major.map { ($0, os.latest.productVersion) } },
+                                       uniquingKeysWith: { first, _ in first })
+        for (identifier, mac) in models ?? [:] where DeviceModel.isAppleSiliconMac(identifier) {
+            if let major = mac.osVersions.filter({ latestByMajor[$0] != nil }).max() {
+                result[identifier] = latestByMajor[major]
+            }
+        }
         return result
+    }
+
+    /// Marketing names the macOS feed gives its models ("MacBook Pro (14-inch, M5)").
+    public func modelNames() -> [String: String] {
+        (models ?? [:]).compactMapValues(\.marketingName)
     }
 }
 
 public struct SOFAClient: Sendable {
     public static let defaultURL = URL(string: "https://sofafeed.macadmins.io/v1/ios_data_feed.json")!
+    public static let macOSURL = URL(string: "https://sofafeed.macadmins.io/v1/macos_data_feed.json")!
 
     /// Where the last feed and its ETag are kept: ~/Library/Caches/consulting.techne.amphora.
     public static var defaultCacheDirectory: URL? {
@@ -93,8 +135,11 @@ public struct SOFAClient: Sendable {
         return feed
     }
 
-    private var bodyURL: URL? { cacheDirectory?.appendingPathComponent("ios_data_feed.json") }
-    private var etagURL: URL? { cacheDirectory?.appendingPathComponent("ios_data_feed.etag") }
+    /// One saved copy per feed, named after it ("ios_data_feed.json", "macos_data_feed.json").
+    private var bodyURL: URL? { cacheDirectory?.appendingPathComponent(url.lastPathComponent) }
+    private var etagURL: URL? {
+        cacheDirectory?.appendingPathComponent(url.deletingPathExtension().lastPathComponent + ".etag")
+    }
 
     private func savedFeed() -> (body: Data, etag: String)? {
         guard let bodyURL, let etagURL,

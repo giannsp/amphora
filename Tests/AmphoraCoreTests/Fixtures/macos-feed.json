@@ -1,0 +1,13 @@
+{
+  "UpdateHash": "test",
+  "OSVersions": [
+    { "OSVersion": "Golden Gate 27", "Latest": { "ProductVersion": "27.0.1", "Build": "26A434", "SupportedDevices": ["J614sAP", "J313AP"] } },
+    { "OSVersion": "Tahoe 26", "Latest": { "ProductVersion": "26.7.1", "Build": "25G241", "SupportedDevices": ["J614sAP", "J313AP", "J152FAP"] } }
+  ],
+  "Models": {
+    "Mac16,1": { "MarketingName": "MacBook Pro (M4, 14-inch, Nov 2024)", "SupportedOS": ["Golden Gate 27", "Tahoe 26"], "OSVersions": [27, 26] },
+    "MacBookAir10,1": { "MarketingName": "MacBook Air (M1, 2020)", "SupportedOS": ["Golden Gate 27", "Tahoe 26"], "OSVersions": [27, 26, 15, 14, 13, 12, 11] },
+    "Mac99,9": { "MarketingName": "Hypothetical Mac dropped by 27", "SupportedOS": ["Tahoe 26"], "OSVersions": [26, 15] },
+    "MacBookPro16,1": { "MarketingName": "MacBook Pro (16-inch, 2019)", "SupportedOS": ["Tahoe 26"], "OSVersions": [26, 15] }
+  }
+}

@@ -1,16 +1,33 @@
 import Foundation
 
-/// An iPhone or iPad model, identified the way Apple and Jamf identify it ("iPhone16,1").
+/// An iPhone, iPad or Mac model, identified the way Apple and Jamf identify it ("iPhone16,1", "Mac16,1").
 public struct DeviceModel: Hashable, Sendable, Codable, Identifiable {
     public enum Family: String, Sendable, Codable, CaseIterable {
-        case iPhone, iPad
+        case iPhone, iPad, mac
     }
 
     public let identifier: String
     public let name: String
 
     public var id: String { identifier }
-    public var family: Family { identifier.hasPrefix("iPad") ? .iPad : .iPhone }
+    public var family: Family { Self.family(of: identifier) }
+
+    public static func family(of identifier: String) -> Family {
+        if identifier.hasPrefix("iPad") { return .iPad }
+        if identifier.hasPrefix("iPhone") { return .iPhone }
+        return .mac
+    }
+
+    /// Apple silicon Macs restore from an IPSW; Intel Macs can't. Every "MacN,N" identifier is Apple silicon
+    /// (Apple switched to that scheme with the M1 Pro/Max generation); the first M1 models kept the old names.
+    public static func isAppleSiliconMac(_ identifier: String) -> Bool {
+        identifier.wholeMatch(of: #/Mac\d+,\d+|MacBookAir10,1|MacBookPro17,1|MacBookPro18,[1-4]|Macmini9,1|iMac21,[12]/#) != nil
+    }
+
+    /// Models Amphora can keep a restore file for: iPhones, iPads and Apple silicon Macs.
+    public static func isRestorable(_ identifier: String) -> Bool {
+        identifier.hasPrefix("iPhone") || identifier.hasPrefix("iPad") || isAppleSiliconMac(identifier)
+    }
 
     /// Model identifiers in free text. Identifiers contain a comma themselves ("iPhone16,1"), so a list like
     /// "iPhone16,1,iPad14,3" can't be split on commas; this finds each "<letters><n>,<n>" instead.

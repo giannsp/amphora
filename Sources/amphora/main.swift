@@ -2,12 +2,12 @@ import Foundation
 import AmphoraCore
 
 let usage = """
-amphora \(AppInfo.version) — keep the latest signed iOS/iPadOS IPSWs on disk
+amphora \(AppInfo.version) — keep the latest signed iOS, iPadOS and macOS IPSWs on disk
 
 USAGE
   amphora sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
-  amphora sync   --from-jamf          [--include-unmanaged] [--keep-removed-days <n>] [same options as above]
-  amphora jamf   [--include-unmanaged]
+  amphora sync   --from-jamf          [--include-macs] [--include-unmanaged] [--keep-removed-days <n>] [same options as above]
+  amphora jamf   [--include-macs] [--include-unmanaged]
   amphora get    <model-identifier>   [--store <dir>] [--configurator]
   amphora plan   --models <id,id,...> [--store <dir>]
   amphora models [--filter <text>]
@@ -20,7 +20,11 @@ USAGE
   jamf    Show which models Jamf Pro holds, with device counts.
 
   Jamf Pro: set JAMF_URL and JAMF_CLIENT_ID, and JAMF_CLIENT_SECRET (or save the secret
-  once in the app, which keeps it in the Keychain). The API role needs Read Mobile Devices.
+  once in the app, which keeps it in the Keychain). The API role needs Read Mobile Devices,
+  and Read Computers for --include-macs (Apple silicon Macs; Intel Macs are skipped).
+
+  Macs: Apple silicon models such as Mac16,1 work with --models and get like any other model.
+  One restore file (about 27 GB) serves every Apple silicon Mac on the same macOS version.
 
   --keep-removed-days: a model that leaves Jamf Pro keeps its file this many days
   (default 14; 0 deletes it at the next sync). History is kept in the store folder.
@@ -40,6 +44,7 @@ struct Arguments {
     var filter: String?
     var fromJamf = false
     var includeUnmanaged = false
+    var includeMacs = false
     var keepRemovedDays = ModelRetention.defaultGraceDays
 
     init(_ argv: [String]) throws {
@@ -59,6 +64,7 @@ struct Arguments {
             case "--filter": filter = it.next()
             case "--from-jamf": fromJamf = true
             case "--include-unmanaged": includeUnmanaged = true
+            case "--include-macs": includeMacs = true
             case "--keep-removed-days":
                 guard let days = it.next().flatMap(Int.init), days >= 0 else {
                     throw ArgumentError("--keep-removed-days needs a number of days, 0 or more")
@@ -139,9 +145,10 @@ func run() async -> Int32 {
             var models = args.models
             if args.fromJamf {
                 let inventory = try await JamfClient(credentials: try jamfCredentials())
-                    .inventory(managedOnly: !args.includeUnmanaged)
+                    .inventory(managedOnly: !args.includeUnmanaged, includeMacs: args.includeMacs)
                 models = Array(inventory.counts.keys)
                 log("Jamf Pro: \(inventory.deviceCount) devices, \(models.count) models")
+                for note in inventory.notes { log("Jamf Pro: \(note)") }
                 // Models that just left Jamf Pro keep their file for a while: see ModelRetention.
                 let store = Store(root: args.store)
                 var retention = store.readRetention()
@@ -182,24 +189,29 @@ func run() async -> Int32 {
 
         case "jamf":
             let inventory = try await JamfClient(credentials: try jamfCredentials())
-                .inventory(managedOnly: !args.includeUnmanaged)
+                .inventory(managedOnly: !args.includeUnmanaged, includeMacs: args.includeMacs)
             for (id, count) in inventory.counts.sorted(by: { $0.value > $1.value }) {
                 print("\(id.padding(toLength: 12, withPad: " ", startingAt: 0)) \(count)")
             }
             print("\(inventory.deviceCount) devices, \(inventory.counts.count) models")
+            for note in inventory.notes { print(note) }
             return 0
 
         case "models":
             async let feed = SOFAClient().fetch()
+            async let macFeed = SOFAClient(url: SOFAClient.macOSURL).fetch()
             async let names = IPSWMeSource().devices()
-            let targets = try await feed.targetVersions()
+            var targets = try await feed.targetVersions()
+            let mac = try await macFeed
+            targets.merge(mac.targetVersions()) { ios, _ in ios }
             let devices = try await names
-            let byID = Dictionary(devices.map { ($0.identifier, $0.name) }, uniquingKeysWith: { a, _ in a })
+            var byID = Dictionary(devices.map { ($0.identifier, $0.name) }, uniquingKeysWith: { a, _ in a })
+            byID.merge(mac.modelNames()) { ipswMe, _ in ipswMe }
             let filter = args.filter?.lowercased()
             for id in targets.keys.sorted(by: { $0.localizedStandardCompare($1) == .orderedAscending }) {
                 let name = byID[id] ?? id
                 if let filter, !name.lowercased().contains(filter), !id.lowercased().contains(filter) { continue }
-                print("\(id.padding(toLength: 12, withPad: " ", startingAt: 0)) "
+                print("\(id.padding(toLength: 15, withPad: " ", startingAt: 0)) "
                       + "\(targets[id]!.padding(toLength: 8, withPad: " ", startingAt: 0)) \(name)")
             }
             return 0
