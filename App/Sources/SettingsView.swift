@@ -38,6 +38,16 @@ struct SettingsView: View {
                         }
                     }
                     Toggle("Only managed devices", isOn: $model.jamfManagedOnly)
+                    LabeledContent {
+                        Stepper(value: $model.jamfGraceDays, in: 0...90) {
+                            Text(model.jamfGraceDays == 0 ? "Delete at next sync" : plural(model.jamfGraceDays, "day"))
+                                .monospacedDigit()
+                        }
+                        .disabled(model.jamfGraceDaysManaged)
+                    } label: {
+                        Text("Keep files for removed models")
+                        Text("When a model's last device leaves Jamf Pro, its file stays this long, in case that device still needs a restore.")
+                    }
                     LabeledContent("Inventory") {
                         HStack {
                             jamfStatus

@@ -28,6 +28,8 @@ Pick a **dedicated folder** for Amphora. During a sync it deletes any `.ipsw` fi
 
 On-demand downloads of a model you haven't ticked are removed at the next sync.
 
+With the Jamf Pro inventory, a model whose last device leaves Jamf Pro keeps its file for **14 days** before it's deleted, so removing a device record before you restore the device doesn't cost you the file. Change it in Settings → Models (0 deletes at the next sync).
+
 ## Install
 
 **App:** download `Amphora-<version>.pkg` from [Releases](../../releases). It installs Amphora in `/Applications` and the `amphora` command in `/usr/local/bin`. Releases are signed with Developer ID and notarized by Apple. To deploy with Jamf Pro, see [below](#deploying-with-jamf-pro).
@@ -49,7 +51,7 @@ swift build -c release
 
 ```text
 amphora sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
-amphora sync   --from-jamf          [--include-unmanaged] [same options as above]
+amphora sync   --from-jamf          [--include-unmanaged] [--keep-removed-days <n>] [same options as above]
 amphora jamf   [--include-unmanaged]
 amphora get    <model-identifier>   [--store <dir>] [--configurator]
 amphora plan   --models <id,id,...> [--store <dir>]
@@ -79,6 +81,8 @@ Model identifiers are the ones Jamf Pro shows as *Model Identifier* (for example
 
 Instead of ticking models by hand, let Jamf Pro decide: Amphora keeps every iPhone and iPad model in your inventory current, and drops IPSWs for models you no longer have.
 
+Amphora reads the inventory at the start of every sync: at launch, every 6 hours by default (1–24 in Settings), and whenever you click **Sync Now**. A new model is downloaded in that same sync. A model that's gone keeps its file for 14 days (configurable), then the next sync deletes it. Amphora tracks models, not devices: a fifth iPhone 15 changes nothing, the first iPhone 17 does.
+
 1. In Jamf Pro → Settings → **API Roles and Clients**, create a role with only **Read Mobile Devices**.
 2. Create an API client with that role, enable it, and generate a client secret.
 3. In Amphora → Settings → Models, choose **Jamf Pro inventory**, enter the address, client ID and secret, and click **Test Connection**.
@@ -89,9 +93,9 @@ What it does and doesn't do:
 - Never writes anything to Jamf Pro.
 - The secret lives in your login Keychain, never in preferences or logs.
 - If Jamf Pro can't be reached, or returns no devices, Amphora keeps using the last good inventory and deletes nothing because of it.
-- Models no signed iOS/iPadOS release supports any more are listed in Settings and skipped.
+- Older models that current releases dropped keep the final release Apple still signs. Models Apple signs nothing for are listed in Settings and skipped.
 
-From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `amphora sync --from-jamf`.
+From the command line, set `JAMF_URL`, `JAMF_CLIENT_ID` and `JAMF_CLIENT_SECRET` (or save the secret once in the app) and run `amphora sync --from-jamf`. It keeps removed models' files for 14 days as well (`--keep-removed-days <n>`); the history is stored in the download folder.
 
 ## Deploying with Jamf Pro
 
@@ -108,6 +112,7 @@ Settings live in the `consulting.techne.amphora` preference domain, so an MDM co
 | `JamfURL` | string | Jamf Pro address, e.g. `https://yourorg.jamfcloud.com` |
 | `JamfClientID` | string | API client ID. The secret is entered once in the app and kept in the Keychain |
 | `JamfManagedDevicesOnly` | boolean | Count only managed devices (default `true`) |
+| `JamfRemovedModelGraceDays` | integer | Days a model's file is kept after its last device leaves Jamf Pro, 0–90 (default `14`; `0` deletes at the next sync) |
 | `StorePath` | string | Folder for IPSWs |
 | `PruneOldIPSWs` | boolean | Delete IPSWs no longer needed (default `true`) |
 | `ExportToConfigurator` | boolean | Place IPSWs in Apple Configurator's cache (default `true`) |

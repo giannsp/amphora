@@ -96,6 +96,7 @@ final class AppModel {
         static let jamfManagedOnly = "JamfManagedDevicesOnly"
         static let jamfCounts = "JamfLastInventory"
         static let jamfFetched = "JamfLastInventoryDate"
+        static let jamfGraceDays = "JamfRemovedModelGraceDays"
         static let legacyTargets = "LegacyModelVersions"
         static let syncHours = "SyncIntervalHours"
         static let showInMenuBar = "ShowInMenuBar"
@@ -116,7 +117,7 @@ final class AppModel {
         guard modelSource == .jamf else { return sofaRows }
         let known = Set(sofaRows.map(\.id))
         let legacy = legacyTargets
-            .filter { !known.contains($0.key) && jamfCounts[$0.key] != nil }
+            .filter { !known.contains($0.key) && jamfModelIDs.contains($0.key) }
             .map { Row(device: DeviceModel(identifier: $0.key, name: deviceNames[$0.key] ?? $0.key),
                        targetVersion: $0.value, isLegacy: true) }
         return sofaRows + legacy
@@ -143,7 +144,7 @@ final class AppModel {
         didSet { defaults.set(selected.sorted(), forKey: Key.selected) }
     }
     var storePath: String {
-        didSet { defaults.set(storePath, forKey: Key.storePath); refreshStatus() }
+        didSet { defaults.set(storePath, forKey: Key.storePath); loadRetained(); refreshStatus() }
     }
     var prune: Bool {
         didSet { defaults.set(prune, forKey: Key.prune) }
@@ -187,6 +188,16 @@ final class AppModel {
         didSet { defaults.set(jamfManagedOnly, forKey: Key.jamfManagedOnly) }
     }
     /// Last successful inventory, kept so the app still knows the fleet when Jamf is unreachable.
+    /// Days a model's file stays after the model leaves Jamf Pro (0: delete at the next sync).
+    var jamfGraceDays: Int {
+        didSet { defaults.set(jamfGraceDays, forKey: Key.jamfGraceDays); loadRetained() }
+    }
+    var jamfGraceDaysManaged: Bool { defaults.objectIsForced(forKey: Key.jamfGraceDays) }
+    /// Models no longer in Jamf Pro whose file is kept until the date shown.
+    var jamfRetained: [String: Date] = [:]
+    /// Every model the Jamf fleet needs: the inventory, plus models within their grace period.
+    var jamfModelIDs: Set<String> { Set(jamfCounts.keys).union(jamfRetained.keys) }
+
     var jamfCounts: [String: Int] {
         didSet { defaults.set(jamfCounts, forKey: Key.jamfCounts) }
     }
@@ -237,12 +248,19 @@ final class AppModel {
         jamfManagedOnly = defaults.object(forKey: Key.jamfManagedOnly) as? Bool ?? true
         jamfCounts = defaults.dictionary(forKey: Key.jamfCounts) as? [String: Int] ?? [:]
         jamfFetched = defaults.object(forKey: Key.jamfFetched) as? Date
+        jamfGraceDays = max(0, defaults.object(forKey: Key.jamfGraceDays) as? Int ?? ModelRetention.defaultGraceDays)
         legacyTargets = defaults.dictionary(forKey: Key.legacyTargets) as? [String: String] ?? [:]
         syncIntervalHours = defaults.object(forKey: Key.syncHours) as? Int ?? 6
         showInMenuBar = defaults.object(forKey: Key.showInMenuBar) as? Bool ?? true
         onboardingCompleted = defaults.bool(forKey: Key.onboardingCompleted)
         notify = defaults.object(forKey: Key.notify) as? Bool ?? true
         jamfSecretSaved = !jamfClientID.isEmpty && Keychain.secret(for: jamfClientID) != nil
+        loadRetained()
+    }
+
+    /// Reads which removed models are still within their grace period, from the store's history.
+    func loadRetained() {
+        jamfRetained = store.readRetention().retained(excluding: Set(jamfCounts.keys), graceDays: jamfGraceDays)
     }
 
     // MARK: Derived
@@ -260,7 +278,7 @@ final class AppModel {
     var keptIDs: Set<String> {
         switch modelSource {
         case .curated: return selected
-        case .jamf: return Set(jamfCounts.keys).intersection(rows.map(\.id))
+        case .jamf: return jamfModelIDs.intersection(rows.map(\.id))
         }
     }
 
@@ -309,7 +327,7 @@ final class AppModel {
         guard !sofaRows.isEmpty else { return }
         let known = Set(sofaRows.map(\.id))
         var resolved: [String: String] = [:]
-        for id in jamfCounts.keys.sorted() where !known.contains(id) {
+        for id in jamfModelIDs.sorted() where !known.contains(id) {
             do {
                 if let firmware = try await IPSWMeSource().latestSignedFirmware(for: id) {
                     resolved[id] = firmware.version
@@ -342,6 +360,10 @@ final class AppModel {
             let inventory = try await JamfClient(credentials: credentials).inventory(managedOnly: jamfManagedOnly)
             jamfCounts = inventory.counts
             jamfFetched = inventory.fetched
+            // A model that just left Jamf Pro keeps its file for a while (ModelRetention).
+            var retention = store.readRetention()
+            jamfRetained = retention.record(inventory: Set(inventory.counts.keys), graceDays: jamfGraceDays)
+            try? store.writeRetention(retention)
             jamfError = nil
             append("Jamf Pro: \(plural(inventory.deviceCount, "device")), \(plural(inventory.counts.count, "model"))")
             await resolveLegacyModels()

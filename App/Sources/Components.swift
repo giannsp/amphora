@@ -185,6 +185,12 @@ struct DeviceRow: View {
                     if let jamfCount {
                         Text("· \(plural(jamfCount, "device")) in Jamf")
                             .font(.caption)
+                    } else if model.modelSource == .jamf, let until = model.jamfRetained[row.id] {
+                        Text("· left Jamf Pro, kept until \(until.formatted(.dateTime.day().month()))")
+                            .font(.caption)
+                            .help("No device of this model is in Jamf Pro any more. Its restore file stays for "
+                                  + "\(plural(model.jamfGraceDays, "day")) in case a device is still waiting to be "
+                                  + "restored, then it's deleted. Change this in Settings.")
                     }
                     if row.isLegacy {
                         Text("· final release for this model")

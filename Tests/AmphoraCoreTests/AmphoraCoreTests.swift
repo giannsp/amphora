@@ -135,6 +135,48 @@ final class StoreTests: XCTestCase {
     }
 }
 
+final class ModelRetentionTests: XCTestCase {
+    let day: TimeInterval = 86_400
+    let start = Date(timeIntervalSince1970: 1_800_000_000)
+
+    func testRemovedModelIsKeptForTheGracePeriodThenForgotten() {
+        var retention = ModelRetention()
+        retention.record(inventory: ["iPhone16,1", "iPad7,4"], graceDays: 14, now: start)
+
+        // iPad7,4 leaves Jamf Pro: still kept, until 14 days after it was last seen.
+        let kept = retention.record(inventory: ["iPhone16,1"], graceDays: 14, now: start + 3 * day)
+        XCTAssertEqual(kept, ["iPad7,4": start + 14 * day])
+
+        // Past the grace period it's dropped, and forgotten.
+        XCTAssertEqual(retention.record(inventory: ["iPhone16,1"], graceDays: 14, now: start + 15 * day), [:])
+        XCTAssertNil(retention.lastSeen["iPad7,4"])
+    }
+
+    func testModelThatComesBackStartsOver() {
+        var retention = ModelRetention()
+        retention.record(inventory: ["iPad7,4"], graceDays: 14, now: start)
+        retention.record(inventory: [], graceDays: 14, now: start + 10 * day)
+        retention.record(inventory: ["iPad7,4"], graceDays: 14, now: start + 12 * day)
+        let kept = retention.record(inventory: [], graceDays: 14, now: start + 20 * day)
+        XCTAssertEqual(kept, ["iPad7,4": start + 26 * day])
+    }
+
+    func testZeroDaysKeepsNothing() {
+        var retention = ModelRetention()
+        retention.record(inventory: ["iPad7,4"], graceDays: 0, now: start)
+        XCTAssertEqual(retention.record(inventory: [], graceDays: 0, now: start + 60), [:])
+    }
+
+    func testRoundTripsThroughTheStore() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = Store(root: root)
+        let retention = ModelRetention(lastSeen: ["iPhone16,1": start])
+        try store.writeRetention(retention)
+        XCTAssertEqual(store.readRetention(), retention)
+    }
+}
+
 final class ModelListTests: XCTestCase {
     func testIdentifiersContainCommas() {
         XCTAssertEqual(DeviceModel.identifiers(in: "iPhone16,1,iPhone16,2,iPad14,3"),

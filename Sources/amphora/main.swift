@@ -6,7 +6,7 @@ amphora \(AppInfo.version) — keep the latest signed iOS/iPadOS IPSWs on disk
 
 USAGE
   amphora sync   --models <id,id,...> [--store <dir>] [--no-prune] [--configurator] [--dry-run]
-  amphora sync   --from-jamf          [--include-unmanaged] [same options as above]
+  amphora sync   --from-jamf          [--include-unmanaged] [--keep-removed-days <n>] [same options as above]
   amphora jamf   [--include-unmanaged]
   amphora get    <model-identifier>   [--store <dir>] [--configurator]
   amphora plan   --models <id,id,...> [--store <dir>]
@@ -21,6 +21,9 @@ USAGE
 
   Jamf Pro: set JAMF_URL and JAMF_CLIENT_ID, and JAMF_CLIENT_SECRET (or save the secret
   once in the app, which keeps it in the Keychain). The API role needs Read Mobile Devices.
+
+  --keep-removed-days: a model that leaves Jamf Pro keeps its file this many days
+  (default 14; 0 deletes it at the next sync). History is kept in the store folder.
 
   --store defaults to "\(Store.defaultRoot.path)". Use a dedicated folder:
   sync deletes any .ipsw in it that the model list does not need.
@@ -37,6 +40,7 @@ struct Arguments {
     var filter: String?
     var fromJamf = false
     var includeUnmanaged = false
+    var keepRemovedDays = ModelRetention.defaultGraceDays
 
     init(_ argv: [String]) throws {
         var it = argv.makeIterator()
@@ -55,6 +59,11 @@ struct Arguments {
             case "--filter": filter = it.next()
             case "--from-jamf": fromJamf = true
             case "--include-unmanaged": includeUnmanaged = true
+            case "--keep-removed-days":
+                guard let days = it.next().flatMap(Int.init), days >= 0 else {
+                    throw ArgumentError("--keep-removed-days needs a number of days, 0 or more")
+                }
+                keepRemovedDays = days
             case "-h", "--help": command = "help"
             default:
                 guard !arg.hasPrefix("-") else { throw ArgumentError("Unknown option \(arg)") }
@@ -133,6 +142,15 @@ func run() async -> Int32 {
                     .inventory(managedOnly: !args.includeUnmanaged)
                 models = Array(inventory.counts.keys)
                 log("Jamf Pro: \(inventory.deviceCount) devices, \(models.count) models")
+                // Models that just left Jamf Pro keep their file for a while: see ModelRetention.
+                let store = Store(root: args.store)
+                var retention = store.readRetention()
+                let kept = retention.record(inventory: Set(models), graceDays: args.keepRemovedDays)
+                if !args.dryRun { try store.writeRetention(retention) }
+                for (model, until) in kept.sorted(by: { $0.key < $1.key }) {
+                    log("\(model): no longer in Jamf Pro, kept until \(until.formatted(date: .abbreviated, time: .omitted))")
+                }
+                models += kept.keys
             }
             guard !models.isEmpty else { print("sync needs --models or --from-jamf\n\n\(usage)"); return 2 }
             if args.dryRun { log("Dry run: nothing will be downloaded or deleted") }

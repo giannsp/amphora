@@ -9,3 +9,6 @@ build/
 *.ipsw
 *.ipsw.part
 dist/
+
+# macOS metadata
+._*
