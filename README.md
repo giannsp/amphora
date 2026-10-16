@@ -186,6 +186,8 @@ Amphora holds a Jamf Pro API secret and uses Full Disk Access, so [SECURITY.md](
 
 Please be kind to both: Amphora makes one request at a time and only syncs every few hours.
 
+Development was assisted by [Claude](https://claude.ai), Anthropic's AI model. Design decisions, testing on real devices and releases are by the maintainer.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
