@@ -8,7 +8,7 @@
 
 Free and open source (MIT). Built by an Apple admin, for Apple admins.
 
-> **Status: early, in daily use.** Curated, on-demand and Jamf Pro modes work, and restores from Apple Configurator's cache are tested on Apple silicon Macs. Builds are universal; Intel Macs are untested so far. See the [roadmap](#roadmap).
+> **Status: early, in daily use.** Curated, on-demand and Jamf Pro modes work, and restores from Apple Configurator's cache are tested for iPhones, iPads and Apple silicon Macs. Builds are universal; running Amphora on an Intel Mac is untested so far. See the [roadmap](#roadmap).
 
 <p align="center"><img src="docs/images/overview.png" width="780" alt="Amphora's Overview: 6 of 7 models ready to restore, 67 GB on disk, latest release 27.0.1, one model still needs a download"></p>
 
